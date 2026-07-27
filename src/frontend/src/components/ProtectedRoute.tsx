@@ -7,11 +7,15 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const { isAuthenticated, isLoading, setupRequired } = useAuth();
 
   if (isLoading) {
     return <LoadingState message="Verificando sesión..." />;
+  }
+
+  if (setupRequired) {
+    return <Navigate to="/setup" replace />;
   }
 
   if (!isAuthenticated) {
@@ -19,4 +23,6 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   return <>{children}</>;
-}
+};
+
+export default ProtectedRoute;

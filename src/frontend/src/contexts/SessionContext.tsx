@@ -1,43 +1,61 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
-import { checkSession, extendSession as apiExtendSession } from '../api/client';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
+import { extendSession } from '../api/client';
 
 interface SessionContextType {
-  timeLeft: number;
   showWarning: boolean;
-  extend: () => void;
+  sessionExpired: boolean;
+  timeRemaining: number;
+  extendSessionNow: () => Promise<void>;
 }
 
+const SESSION_DURATION_MS = 15 * 60 * 1000; // 15 min
+const WARNING_THRESHOLD_MS = 2 * 60 * 1000; // 2 min before expiry
+const CHECK_INTERVAL_MS = 30 * 1000; // check every 30s
+const EXTEND_DEBOUNCE_MS = 60 * 1000; // extend at most once per minute
+
 const SessionContext = createContext<SessionContextType>({
-  timeLeft: 15 * 60,
   showWarning: false,
-  extend: () => {},
+  sessionExpired: false,
+  timeRemaining: SESSION_DURATION_MS,
+  extendSessionNow: async () => {},
 });
 
-const SESSION_DURATION = 15 * 60; // 15 minutes in seconds
-const WARNING_THRESHOLD = 2 * 60; // 2 minutes before expiry
-
-export function SessionProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
-  const [timeLeft, setTimeLeft] = useState(SESSION_DURATION);
+export const SessionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { isAuthenticated, logout } = useAuth();
   const [showWarning, setShowWarning] = useState(false);
-  const lastActivityRef = useRef(Date.now());
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(SESSION_DURATION_MS);
+  const lastActivityRef = useRef<number>(Date.now());
+  const lastExtendRef = useRef<number>(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const resetTimer = useCallback(() => {
-    lastActivityRef.current = Date.now();
-    setTimeLeft(SESSION_DURATION);
-    setShowWarning(false);
+  const extendSessionNow = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastExtendRef.current < EXTEND_DEBOUNCE_MS) return;
+
+    try {
+      await extendSession();
+      lastExtendRef.current = now;
+      lastActivityRef.current = now;
+      setShowWarning(false);
+      setSessionExpired(false);
+    } catch {
+      // If extending fails, let the session expire naturally
+    }
   }, []);
 
-  const extend = useCallback(async () => {
-    try {
-      await apiExtendSession();
-      resetTimer();
-    } catch {
-      // ignore
+  const resetActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    if (showWarning) {
+      setShowWarning(false);
     }
-  }, [resetTimer]);
+    // Auto-extend on activity when in warning zone
+    const elapsed = Date.now() - lastExtendRef.current;
+    if (elapsed >= SESSION_DURATION_MS - WARNING_THRESHOLD_MS) {
+      extendSessionNow();
+    }
+  }, [showWarning, extendSessionNow]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -45,55 +63,69 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      setShowWarning(false);
+      setSessionExpired(false);
       return;
     }
 
     const handleActivity = () => {
-      lastActivityRef.current = Date.now();
+      resetActivity();
     };
 
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('click', handleActivity);
+    window.addEventListener('scroll', handleActivity);
 
     intervalRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - lastActivityRef.current) / 1000);
-      const remaining = Math.max(0, SESSION_DURATION - elapsed);
-      setTimeLeft(remaining);
+      const now = Date.now();
+      const elapsed = now - lastActivityRef.current;
+      const remaining = SESSION_DURATION_MS - elapsed;
+      setTimeRemaining(Math.max(0, remaining));
 
-      if (remaining <= WARNING_THRESHOLD && remaining > 0) {
+      if (elapsed >= SESSION_DURATION_MS) {
+        setSessionExpired(true);
+        setShowWarning(false);
+        logout();
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      } else if (elapsed >= SESSION_DURATION_MS - WARNING_THRESHOLD_MS) {
         setShowWarning(true);
+      } else {
+        setShowWarning(false);
       }
-
-      if (remaining <= 0) {
-        // Session expired - logout
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-      }
-    }, 1000);
-
-    // Check session from server
-    checkSession().catch(() => {});
+    }, CHECK_INTERVAL_MS);
 
     return () => {
       window.removeEventListener('mousemove', handleActivity);
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('click', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, logout, resetActivity]);
 
   return (
-    <SessionContext.Provider value={{ timeLeft, showWarning, extend }}>
+    <SessionContext.Provider
+      value={{
+        showWarning,
+        sessionExpired,
+        timeRemaining,
+        extendSessionNow,
+      }}
+    >
       {children}
     </SessionContext.Provider>
   );
-}
+};
 
-export function useSession() {
+export const useSession = (): SessionContextType => {
   return useContext(SessionContext);
-}
+};
 
 export default SessionContext;

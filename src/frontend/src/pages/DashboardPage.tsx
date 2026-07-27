@@ -1,172 +1,138 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import LayoutWithNav from '../components/LayoutWithNav';
-import SessionTimer from '../components/SessionTimer';
+import { getMe } from '../api/client';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
-import {
-  Users,
-  ShoppingCart,
-  Package,
-  TrendingUp,
-  UserCheck,
-  Shield,
-} from 'lucide-react';
+import { LayoutDashboard, User, Shield, Calendar, Store } from 'lucide-react';
 
-export default function DashboardPage() {
-  const { user, isLoading: authLoading } = useAuth();
-  const navigate = useNavigate();
+const DashboardPage: React.FC = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        navigate('/login', { replace: true });
-        return;
+    const load = async () => {
+      try {
+        await getMe();
+        setLoading(false);
+      } catch (err: any) {
+        setError(err.message || 'Error al cargar datos');
+        setLoading(false);
       }
-      // Simulate loading dashboard data
-      const timer = setTimeout(() => setLoading(false), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [authLoading, user, navigate]);
+    };
+    load();
+  }, []);
 
-  if (authLoading || loading) {
-    return (
-      <LayoutWithNav>
-        <LoadingState message="Cargando dashboard..." />
-      </LayoutWithNav>
-    );
-  }
+  if (loading) return <LoadingState message="Cargando dashboard..." />;
+  if (error) return <ErrorState message={error} onRetry={() => window.location.reload()} />;
 
-  if (error) {
-    return (
-      <LayoutWithNav>
-        <ErrorState message={error} onRetry={() => setLoading(true)} />
-      </LayoutWithNav>
-    );
-  }
-
-  if (!user) return null;
+  const roleBadgeColor = (role: string) => {
+    const colors: Record<string, string> = {
+      administrador: 'bg-purple-100 text-purple-700',
+      bodega: 'bg-blue-100 text-blue-700',
+      vendedor: 'bg-green-100 text-green-700',
+      compras: 'bg-amber-100 text-amber-700',
+    };
+    return colors[role] || 'bg-slate-100 text-slate-700';
+  };
 
   const statsCards = [
     {
-      title: 'Mi perfil',
-      value: user.full_name,
-      subtitle: user.role,
-      icon: UserCheck,
+      title: 'Bienvenido',
+      value: user?.full_name || 'Usuario',
+      icon: User,
       color: 'bg-blue-50 text-blue-600',
     },
     {
       title: 'Rol',
-      value: user.role.charAt(0).toUpperCase() + user.role.slice(1),
-      subtitle: 'Nivel de acceso',
+      value: user?.role || '',
       icon: Shield,
       color: 'bg-purple-50 text-purple-600',
     },
     {
       title: 'Usuario',
-      value: user.username,
-      subtitle: 'Nombre de usuario',
-      icon: Users,
+      value: user?.username || '',
+      icon: LayoutDashboard,
       color: 'bg-green-50 text-green-600',
     },
     {
-      title: 'Estado',
-      value: user.is_active ? 'Activo' : 'Inactivo',
-      subtitle: 'Cuenta',
-      icon: TrendingUp,
-      color: user.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600',
+      title: 'Miembro desde',
+      value: user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A',
+      icon: Calendar,
+      color: 'bg-amber-50 text-amber-600',
     },
   ];
 
   return (
-    <LayoutWithNav>
-      <SessionTimer />
-      
-      {/* Welcome section */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">
-          Bienvenido, {user.full_name}
-        </h1>
-        <p className="text-slate-500 mt-1">
-          Panel principal del sistema de gestión Ferretería
-        </p>
+    <div className="space-y-8">
+      {/* Page header */}
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
+          <Store size={28} className="text-blue-600" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-slate-500">Panel principal de Ferretería</p>
+        </div>
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {statsCards.map((card, index) => (
-          <div
-            key={index}
-            className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className={`p-3 rounded-xl ${card.color}`}>
-                <card.icon size={24} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statsCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.title}
+              className="bg-white rounded-2xl shadow-sm p-6 border border-slate-100 hover:shadow-md transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${card.color}`}>
+                  <Icon size={24} />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">{card.title}</p>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {card.title === 'Rol' ? (
+                      <span className={`inline-block px-3 py-0.5 rounded-full text-sm ${roleBadgeColor(card.value)}`}>
+                        {card.value}
+                      </span>
+                    ) : (
+                      card.value
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
-            <h3 className="text-sm font-medium text-slate-500">{card.title}</h3>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{card.value}</p>
-            <p className="text-xs text-slate-400 mt-1">{card.subtitle}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Quick actions / modules */}
-      <div className="bg-white rounded-2xl shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Módulos del sistema</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button
-            onClick={() => navigate('/profile')}
-            className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl hover:bg-blue-50 transition-all text-left"
-          >
-            <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-              <UserCheck size={20} />
-            </div>
-            <div>
-              <p className="font-medium text-slate-900 text-sm">Mi Perfil</p>
-              <p className="text-xs text-slate-500">Ver y editar perfil</p>
-            </div>
-          </button>
-
-          {user.role === 'administrador' && (
-            <button
-              onClick={() => navigate('/admin/users')}
-              className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl hover:bg-blue-50 transition-all text-left"
-            >
-              <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
-                <Users size={20} />
-              </div>
-              <div>
-                <p className="font-medium text-slate-900 text-sm">Usuarios</p>
-                <p className="text-xs text-slate-500">Gestionar usuarios</p>
-              </div>
-            </button>
-          )}
-
-          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl opacity-60">
-            <div className="p-2 bg-green-100 rounded-lg text-green-600">
-              <Package size={20} />
-            </div>
-            <div>
-              <p className="font-medium text-slate-900 text-sm">Inventario</p>
-              <p className="text-xs text-slate-500">Próximamente</p>
-            </div>
+      {/* Info panel */}
+      <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Información del Sistema</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 bg-slate-50 rounded-2xl">
+            <p className="text-sm text-slate-500 mb-1">Nombre completo</p>
+            <p className="text-base font-medium text-slate-900">{user?.full_name || '—'}</p>
           </div>
-
-          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl opacity-60">
-            <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
-              <ShoppingCart size={20} />
-            </div>
-            <div>
-              <p className="font-medium text-slate-900 text-sm">Ventas</p>
-              <p className="text-xs text-slate-500">Próximamente</p>
-            </div>
+          <div className="p-4 bg-slate-50 rounded-2xl">
+            <p className="text-sm text-slate-500 mb-1">Correo electrónico</p>
+            <p className="text-base font-medium text-slate-900">{user?.email || '—'}</p>
+          </div>
+          <div className="p-4 bg-slate-50 rounded-2xl">
+            <p className="text-sm text-slate-500 mb-1">Estado de cuenta</p>
+            <p className={`text-base font-medium ${user?.is_active ? 'text-green-600' : 'text-red-600'}`}>
+              {user?.is_active ? 'Activa' : 'Inactiva'}
+            </p>
+          </div>
+          <div className="p-4 bg-slate-50 rounded-2xl">
+            <p className="text-sm text-slate-500 mb-1">Rol</p>
+            <p className="text-base font-medium text-slate-900 capitalize">{user?.role || '—'}</p>
           </div>
         </div>
       </div>
-    </LayoutWithNav>
+    </div>
   );
-}
+};
+
+export default DashboardPage;

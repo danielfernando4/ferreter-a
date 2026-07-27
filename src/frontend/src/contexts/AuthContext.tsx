@@ -1,86 +1,102 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { login as apiLogin, logout as apiLogout, getMe } from '../api/client';
-
-interface User {
-  id: string;
-  full_name: string;
-  username: string;
-  email: string;
-  role: string;
-  is_active: boolean;
-  created_at?: string;
-}
+import type { User } from '../types';
+import { getMe, login as apiLogin, logout as apiLogout, checkSetupStatus, setToken, clearToken } from '../api/client';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  setupRequired: boolean | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  extendSession: () => void;
+  refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  isLoading: true,
-  login: async () => {},
-  logout: async () => {},
-  extendSession: () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  const [token, setTokenState] = useState<string | null>(localStorage.getItem('auth_token'));
   const [isLoading, setIsLoading] = useState(true);
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
 
-  const fetchUser = useCallback(async () => {
-    const storedToken = localStorage.getItem('token');
-    if (!storedToken) {
-      setUser(null);
-      setIsLoading(false);
-      return;
-    }
+  const refreshUser = useCallback(async () => {
     try {
-      const userData = await getMe();
-      setUser(userData as User);
+      const me = await getMe();
+      setUser({
+        id: me.id,
+        full_name: me.full_name,
+        username: me.username,
+        email: me.email,
+        role: me.role as User['role'],
+        is_active: me.is_active,
+        created_at: me.created_at,
+      });
     } catch {
-      localStorage.removeItem('token');
-      setToken(null);
+      clearToken();
+      setTokenState(null);
       setUser(null);
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+    const init = async () => {
+      setIsLoading(true);
+      try {
+        const status = await checkSetupStatus();
+        setSetupRequired(status.setup_required);
+        if (status.setup_required) {
+          setIsLoading(false);
+          return;
+        }
+      } catch {
+        setSetupRequired(true);
+        setIsLoading(false);
+        return;
+      }
+
+      const storedToken = localStorage.getItem('auth_token');
+      if (storedToken) {
+        setTokenState(storedToken);
+        try {
+          const me = await getMe();
+          setUser({
+            id: me.id,
+            full_name: me.full_name,
+            username: me.username,
+            email: me.email,
+            role: me.role as User['role'],
+            is_active: me.is_active,
+            created_at: me.created_at,
+          });
+        } catch {
+          clearToken();
+          setTokenState(null);
+          setUser(null);
+        }
+      }
+      setIsLoading(false);
+    };
+    init();
+  }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     const response = await apiLogin({ username, password });
-    localStorage.setItem('token', response.token);
     setToken(response.token);
-    const userData = await getMe();
-    setUser(userData as User);
+    setTokenState(response.token);
+    setUser(response.user);
   }, []);
 
   const logout = useCallback(async () => {
     try {
       await apiLogout();
     } catch {
-      // ignore errors
+      // Ignore errors during logout
     }
-    localStorage.removeItem('token');
-    setToken(null);
+    clearToken();
+    setTokenState(null);
     setUser(null);
-  }, []);
-
-  const extendSession = useCallback(() => {
-    // The SessionTimer component handles the API call
-    // This just provides a hook for the context
   }, []);
 
   return (
@@ -90,18 +106,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         isAuthenticated: !!token && !!user,
         isLoading,
+        setupRequired,
         login,
         logout,
-        extendSession,
+        refreshUser,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth debe usarse dentro de un AuthProvider');
+  }
+  return context;
+};
 
 export default AuthContext;

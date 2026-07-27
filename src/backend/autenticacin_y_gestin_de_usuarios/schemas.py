@@ -1,73 +1,29 @@
 from datetime import datetime
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-
-# --- Setup schemas ---
+# --- Setup ---
 class SetupRequest(BaseModel):
-    full_name: str = Field(..., min_length=1)
-    username: str = Field(..., min_length=1)
-    email: str = Field(..., min_length=1)
-    password: str = Field(..., min_length=1)
+    full_name: str
+    username: str
+    email: str
+    password: str
 
 
 class SetupResponse(BaseModel):
     message: str
 
 
-class SetupStatusResponse(BaseModel):
-    setup_required: bool
-
-
-# --- Auth schemas ---
+# --- Auth ---
 class LoginRequest(BaseModel):
-    username: str = Field(..., min_length=1)
-    password: str = Field(..., min_length=1)
-
-
-class UserBrief(BaseModel):
-    id: str
-    full_name: str
     username: str
-    email: str
-    role: str
+    password: str
 
+
+class UserMeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-
-class LoginResponse(BaseModel):
-    token: str
-    user: UserBrief
-
-
-class LogoutResponse(BaseModel):
-    message: str
-
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=1)
-    confirm_password: str = Field(..., min_length=1)
-
-
-class ChangePasswordResponse(BaseModel):
-    message: str
-
-
-# --- Session schemas ---
-class SessionCheckResponse(BaseModel):
-    active: bool
-    expires_at: str
-
-
-class SessionExtendResponse(BaseModel):
-    message: str
-    expires_at: str
-
-
-# --- User management schemas ---
-class UserResponse(BaseModel):
     id: str
     full_name: str
     username: str
@@ -76,23 +32,76 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+
+class LoginResponse(BaseModel):
+    token: str
+    user: UserMeResponse
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+
+class SessionCheckResponse(BaseModel):
+    active: bool
+    expires_at: Optional[datetime] = None
+
+
+class SessionExtendResponse(BaseModel):
+    message: str
+    expires_at: datetime
+
+
+# --- Admin Users ---
 class CreateUserRequest(BaseModel):
-    full_name: str = Field(..., min_length=1)
-    username: str = Field(..., min_length=3)
-    email: str = Field(..., min_length=1)
-    password: str = Field(..., min_length=8)
-    role: str = Field(..., pattern="^(administrador|bodega|vendedor|compras)$")
+    full_name: str
+    username: str
+    email: str
+    password: str
+    role: str
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        allowed = {"administrador", "bodega", "vendedor", "compras"}
+        if v.lower() not in allowed:
+            raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(allowed)}")
+        return v.lower()
 
 
 class UpdateUserRequest(BaseModel):
-    full_name: str = Field(..., min_length=1)
-    email: str = Field(..., min_length=1)
-    role: str = Field(..., pattern="^(administrador|bodega|vendedor|compras)$")
+    full_name: str
+    email: str
+    role: str
     is_active: bool
 
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        allowed = {"administrador", "bodega", "vendedor", "compras"}
+        if v.lower() not in allowed:
+            raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(allowed)}")
+        return v.lower()
 
-class DeleteUserResponse(BaseModel):
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    full_name: str
+    username: str
+    email: str
+    role: str
+    is_active: bool
+    created_at: datetime
+
+
+class MessageResponse(BaseModel):
     message: str
+
+
+# --- Setup status ---
+class SetupStatusResponse(BaseModel):
+    setup_required: bool

@@ -1,18 +1,12 @@
-export interface UserBrief {
+export interface User {
+  id?: string;
   full_name: string;
   username: string;
   email: string;
-  role: string;
-}
-
-export interface UserResponse {
-  id: string;
-  full_name: string;
-  username: string;
-  email: string;
-  role: string;
+  role: 'administrador' | 'bodega' | 'vendedor' | 'compras';
   is_active: boolean;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface LoginRequest {
@@ -22,18 +16,21 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string;
-  user: UserBrief;
+  user: User;
 }
 
 export interface SetupStatusResponse {
   setup_required: boolean;
 }
 
-export interface SetupResponse {
-  message: string;
+export interface SetupRequest {
+  full_name: string;
+  username: string;
+  email: string;
+  password: string;
 }
 
-export interface LogoutResponse {
+export interface SetupResponse {
   message: string;
 }
 
@@ -43,7 +40,7 @@ export interface ChangePasswordRequest {
   confirm_password: string;
 }
 
-export interface ChangePasswordResponse {
+export interface MessageResponse {
   message: string;
 }
 
@@ -72,8 +69,22 @@ export interface UpdateUserRequest {
   is_active: boolean;
 }
 
-export interface DeleteUserResponse {
-  message: string;
+export interface UserResponse {
+  id: string;
+  full_name: string;
+  username: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at?: string;
 }
 
-export type UserRole = 'administrador' | 'bodega' | 'vendedor' | 'compras';
+export interface UserMeResponse {
+  id: string;
+  full_name: string;
+  username: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at?: string;
+}

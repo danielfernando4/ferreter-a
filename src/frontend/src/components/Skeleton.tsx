@@ -1,19 +1,21 @@
 import React from 'react';
 
 interface SkeletonProps {
-  className?: string;
   count?: number;
+  className?: string;
 }
 
-export default function Skeleton({ className = '', count = 1 }: SkeletonProps) {
+const Skeleton: React.FC<SkeletonProps> = ({ count = 1, className = 'h-6 w-full' }) => {
   return (
     <>
-      {Array.from({ length: count }).map((_, i) => (
+      {Array.from({ length: count }).map((_, index) => (
         <div
-          key={i}
+          key={index}
           className={`animate-pulse bg-slate-200 rounded-lg ${className}`}
         />
       ))}
     </>
   );
-}
+};
+
+export default Skeleton;

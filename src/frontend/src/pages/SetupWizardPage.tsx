@@ -1,17 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store, Loader2, CheckCircle } from 'lucide-react';
-import { checkSetupStatus, setupFirstAdmin } from '../api/client';
-import { validatePassword } from '../utils/passwordPolicy';
-import { validateRequired, validateEmail, validatePasswordMatch, ValidationErrors } from '../utils/validation';
+import { Store, Shield, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import { setupFirstAdmin } from '../api/client';
+import { validateRequired, validateEmail, validatePasswordPolicy, validatePasswordMatch } from '../utils/validation';
+import LoadingState from '../components/LoadingState';
 
-export default function SetupWizardPage() {
+const SetupWizardPage: React.FC = () => {
   const navigate = useNavigate();
-  const [loadingStatus, setLoadingStatus] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
     username: '',
@@ -19,71 +14,54 @@ export default function SetupWizardPage() {
     password: '',
     confirm_password: '',
   });
-  const [fieldErrors, setFieldErrors] = useState<ValidationErrors>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    checkSetupStatus()
-      .then((data) => {
-        if (!cancelled) {
-          setSetupRequired(data.setup_required);
-          if (!data.setup_required) {
-            navigate('/login', { replace: true });
-          }
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSetupRequired(true);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoadingStatus(false);
-        }
+  const handleChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [navigate]);
+    }
+    setApiError('');
+  };
 
   const validate = (): boolean => {
-    const errors: ValidationErrors = {};
+    const newErrors: Record<string, string> = {};
 
-    const fnErr = validateRequired(formData.full_name, 'Nombre completo');
-    if (fnErr) errors.full_name = fnErr;
+    const nameErr = validateRequired(formData.full_name, 'Nombre completo');
+    if (nameErr) newErrors.full_name = nameErr;
 
-    const unErr = validateRequired(formData.username, 'Nombre de usuario');
-    if (unErr) errors.username = unErr;
+    const usernameErr = validateRequired(formData.username, 'Nombre de usuario');
+    if (usernameErr) newErrors.username = usernameErr;
 
-    const emErr = validateEmail(formData.email);
-    if (emErr) errors.email = emErr;
+    const emailErr = validateEmail(formData.email);
+    if (emailErr) newErrors.email = emailErr;
 
-    const pwErr = validateRequired(formData.password, 'Contraseña');
-    if (pwErr) errors.password = pwErr;
-    else {
-      const pwValid = validatePassword(formData.password);
-      if (!pwValid.valid) errors.password = pwValid.message;
-    }
+    const passErr = validatePasswordPolicy(formData.password);
+    if (passErr) newErrors.password = passErr;
 
-    const cpErr = validateRequired(formData.confirm_password, 'Confirmar contraseña');
-    if (cpErr) errors.confirm_password = cpErr;
-    else {
-      const matchErr = validatePasswordMatch(formData.password, formData.confirm_password);
-      if (matchErr) errors.confirm_password = matchErr;
-    }
+    const matchErr = validatePasswordMatch(formData.password, formData.confirm_password);
+    if (matchErr) newErrors.confirm_password = matchErr;
 
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
     if (!validate()) return;
 
-    setSubmitting(true);
+    setIsSubmitting(true);
+    setApiError('');
+
     try {
       await setupFirstAdmin({
         full_name: formData.full_name,
@@ -93,181 +71,189 @@ export default function SetupWizardPage() {
       });
       setSuccess(true);
       setTimeout(() => {
-        navigate('/login', { replace: true });
+        navigate('/login');
       }, 2000);
     } catch (err: any) {
-      setError(err.message || 'Error al crear el administrador');
+      setApiError(err.message || 'Error al crear el administrador');
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (fieldErrors[field]) {
-      setFieldErrors((prev) => {
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
-    }
-  };
-
-  if (loadingStatus) {
+  if (success) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="animate-spin text-blue-600" size={40} />
-          <p className="text-slate-500 text-sm">Verificando configuración del sistema...</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-sm p-8 max-w-md w-full text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center">
+              <CheckCircle size={36} className="text-green-600" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">¡Configuración Completa!</h2>
+          <p className="text-slate-600 mb-6">
+            El administrador ha sido creado exitosamente. Redirigiendo al inicio de sesión...
+          </p>
         </div>
       </div>
     );
   }
 
-  if (setupRequired === false) {
-    return null;
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-8">
+      <div className="bg-white rounded-2xl shadow-sm p-8 max-w-md w-full">
+        {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-sm mb-4">
-            <Store className="text-white" size={32} />
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center">
+              <Store size={36} className="text-white" />
+            </div>
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Ferretería</h1>
-          <p className="text-slate-500 mt-1">Configuración inicial del sistema</p>
+          <p className="text-slate-500 mt-2">Configuración Inicial</p>
+          <div className="flex items-center justify-center gap-2 mt-3 text-sm text-amber-600 bg-amber-50 rounded-2xl px-4 py-2">
+            <Shield size={16} />
+            <span>Primera ejecución — Crea el administrador del sistema</span>
+          </div>
         </div>
 
-        {success ? (
-          <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-green-100 rounded-full mb-4">
-              <CheckCircle className="text-green-600" size={28} />
-            </div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-2">¡Administrador creado!</h2>
-            <p className="text-slate-500 text-sm">Redirigiendo al inicio de sesión...</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl shadow-sm p-8">
-            <h2 className="text-lg font-semibold text-slate-900 mb-6">
-              Crear administrador
-            </h2>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm mb-6">
-                {error}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Nombre completo
-                </label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => handleChange('full_name', e.target.value)}
-                  className={`w-full px-4 py-2.5 rounded-xl border ${
-                    fieldErrors.full_name ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                  placeholder="Ingresa tu nombre completo"
-                />
-                {fieldErrors.full_name && (
-                  <p className="text-red-500 text-xs mt-1">{fieldErrors.full_name}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Nombre de usuario
-                </label>
-                <input
-                  type="text"
-                  value={formData.username}
-                  onChange={(e) => handleChange('username', e.target.value)}
-                  className={`w-full px-4 py-2.5 rounded-xl border ${
-                    fieldErrors.username ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                  placeholder="Usuario para iniciar sesión"
-                />
-                {fieldErrors.username && (
-                  <p className="text-red-500 text-xs mt-1">{fieldErrors.username}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Correo electrónico
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  className={`w-full px-4 py-2.5 rounded-xl border ${
-                    fieldErrors.email ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                  placeholder="correo@ejemplo.com"
-                />
-                {fieldErrors.email && (
-                  <p className="text-red-500 text-xs mt-1">{fieldErrors.email}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Contraseña
-                </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => handleChange('password', e.target.value)}
-                  className={`w-full px-4 py-2.5 rounded-xl border ${
-                    fieldErrors.password ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                  placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número, 1 especial"
-                />
-                {fieldErrors.password && (
-                  <p className="text-red-500 text-xs mt-1">{fieldErrors.password}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Confirmar contraseña
-                </label>
-                <input
-                  type="password"
-                  value={formData.confirm_password}
-                  onChange={(e) => handleChange('confirm_password', e.target.value)}
-                  className={`w-full px-4 py-2.5 rounded-xl border ${
-                    fieldErrors.confirm_password ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                  placeholder="Repite la contraseña"
-                />
-                {fieldErrors.confirm_password && (
-                  <p className="text-red-500 text-xs mt-1">{fieldErrors.confirm_password}</p>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="animate-spin" size={18} />
-                    Configurando...
-                  </>
-                ) : (
-                  'Configurar sistema'
-                )}
-              </button>
-            </form>
+        {/* API Error */}
+        {apiError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700">
+            <AlertCircle size={20} />
+            <span className="text-sm">{apiError}</span>
           </div>
         )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Full Name */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Nombre completo <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.full_name}
+              onChange={(e) => handleChange('full_name', e.target.value)}
+              className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${
+                errors.full_name ? 'border-red-300 bg-red-50' : 'border-slate-300'
+              }`}
+              placeholder="Ej: Juan Pérez"
+            />
+            {errors.full_name && (
+              <p className="text-red-500 text-xs mt-1">{errors.full_name}</p>
+            )}
+          </div>
+
+          {/* Username */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Nombre de usuario <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.username}
+              onChange={(e) => handleChange('username', e.target.value)}
+              className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${
+                errors.username ? 'border-red-300 bg-red-50' : 'border-slate-300'
+              }`}
+              placeholder="Ej: jperez"
+            />
+            {errors.username && (
+              <p className="text-red-500 text-xs mt-1">{errors.username}</p>
+            )}
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Correo electrónico <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleChange('email', e.target.value)}
+              className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${
+                errors.email ? 'border-red-300 bg-red-50' : 'border-slate-300'
+              }`}
+              placeholder="Ej: juan@ejemplo.com"
+            />
+            {errors.email && (
+              <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+            )}
+          </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Contraseña <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={(e) => handleChange('password', e.target.value)}
+                className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-10 ${
+                  errors.password ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                }`}
+                placeholder="Mínimo 8 caracteres"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {errors.password && (
+              <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+            )}
+            <p className="text-xs text-slate-400 mt-1">
+              Mínimo 8 caracteres, 1 mayúscula, 1 número y 1 carácter especial
+            </p>
+          </div>
+
+          {/* Confirm Password */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Confirmar contraseña <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={formData.confirm_password}
+                onChange={(e) => handleChange('confirm_password', e.target.value)}
+                className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-10 ${
+                  errors.confirm_password ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                }`}
+                placeholder="Repite la contraseña"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {errors.confirm_password && (
+              <p className="text-red-500 text-xs mt-1">{errors.confirm_password}</p>
+            )}
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-3 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+          >
+            {isSubmitting ? 'Creando administrador...' : 'Crear Administrador'}
+          </button>
+        </form>
       </div>
     </div>
   );
-}
+};
+
+export default SetupWizardPage;

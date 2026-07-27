@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import LayoutWithNav from '../../components/LayoutWithNav';
-import SessionTimer from '../../components/SessionTimer';
+import { createUser, updateUser, getUser } from '../../api/client';
+import { validateRequired, validateEmail, validatePasswordPolicy } from '../../utils/validation';
 import LoadingState from '../../components/LoadingState';
 import ErrorState from '../../components/ErrorState';
-import { createUser, getUser, updateUser } from '../../api/client';
-import { validatePassword } from '../../utils/passwordPolicy';
-import { validateRequired, validateEmail, ValidationErrors } from '../../utils/validation';
-import { Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Users, AlertCircle, Eye, EyeOff, Save, ArrowLeft } from 'lucide-react';
 
 const ROLES = [
   { value: 'administrador', label: 'Administrador' },
@@ -16,316 +13,341 @@ const ROLES = [
   { value: 'compras', label: 'Compras' },
 ];
 
-export default function UserFormPage() {
+const UserFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const isEdit = !!id;
+  const isEdit = Boolean(id);
 
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState('vendedor');
+  const [isActive, setIsActive] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(isEdit);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [formData, setFormData] = useState({
-    full_name: '',
-    username: '',
-    email: '',
-    password: '',
-    role: 'vendedor',
-    is_active: true,
-  });
-  const [fieldErrors, setFieldErrors] = useState<ValidationErrors>({});
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     if (isEdit && id) {
-      setLoading(true);
-      setError('');
-      getUser(id)
-        .then((data) => {
-          setFormData({
-            full_name: data.full_name || '',
-            username: data.username || '',
-            email: data.email || '',
-            password: '',
-            role: data.role || 'vendedor',
-            is_active: data.is_active !== undefined ? data.is_active : true,
-          });
-        })
-        .catch((err) => {
-          setError(err.message || 'Error al cargar usuario');
-        })
-        .finally(() => {
+      const loadUser = async () => {
+        try {
+          const user = await getUser(id);
+          setFullName(user.full_name);
+          setUsername(user.username);
+          setEmail(user.email);
+          setRole(user.role);
+          setIsActive(user.is_active);
+        } catch (err: any) {
+          setLoadError(err.message || 'Error al cargar usuario');
+        } finally {
           setLoading(false);
-        });
+        }
+      };
+      loadUser();
     }
   }, [isEdit, id]);
 
-  const handleChange = (field: string, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (fieldErrors[field]) {
-      setFieldErrors((prev) => {
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
-    }
-  };
-
   const validate = (): boolean => {
-    const errors: ValidationErrors = {};
+    const newErrors: Record<string, string> = {};
 
-    const fnErr = validateRequired(formData.full_name, 'Nombre completo');
-    if (fnErr) errors.full_name = fnErr;
-
-    const unErr = validateRequired(formData.username, 'Nombre de usuario');
-    if (unErr) errors.username = unErr;
-
-    const emErr = validateEmail(formData.email);
-    if (emErr) errors.email = emErr;
+    const nameErr = validateRequired(fullName, 'Nombre completo');
+    if (nameErr) newErrors.full_name = nameErr;
 
     if (!isEdit) {
-      const pwErr = validateRequired(formData.password, 'Contraseña');
-      if (pwErr) errors.password = pwErr;
-      else {
-        const pwValid = validatePassword(formData.password);
-        if (!pwValid.valid) errors.password = pwValid.message;
+      const usernameErr = validateRequired(username, 'Nombre de usuario');
+      if (usernameErr) newErrors.username = usernameErr;
+    }
+
+    const emailErr = validateEmail(email);
+    if (emailErr) newErrors.email = emailErr;
+
+    if (!isEdit) {
+      const passErr = validatePasswordPolicy(password);
+      if (passErr) newErrors.password = passErr;
+
+      if (password !== confirmPassword) {
+        newErrors.confirm_password = 'Las contraseñas no coinciden';
       }
     }
 
-    const roleErr = validateRequired(formData.role, 'Rol');
-    if (roleErr) errors.role = roleErr;
-
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-
     if (!validate()) return;
 
-    setSubmitting(true);
+    setIsSubmitting(true);
+    setApiError('');
+
     try {
       if (isEdit && id) {
         await updateUser(id, {
-          full_name: formData.full_name,
-          email: formData.email,
-          role: formData.role,
-          is_active: formData.is_active,
+          full_name: fullName,
+          email,
+          role,
+          is_active: isActive,
         });
-        setSuccess('Usuario actualizado exitosamente');
       } else {
         await createUser({
-          full_name: formData.full_name,
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
-          role: formData.role,
+          full_name: fullName,
+          username,
+          email,
+          password,
+          role,
         });
-        setSuccess('Usuario creado exitosamente');
       }
-      setTimeout(() => {
-        navigate('/admin/users');
-      }, 1500);
+      navigate('/admin/users');
     } catch (err: any) {
-      setError(err.message || 'Error al guardar usuario');
+      setApiError(err.message || 'Error al guardar usuario');
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <LayoutWithNav>
-        <LoadingState message="Cargando datos del usuario..." />
-      </LayoutWithNav>
-    );
-  }
+  if (loading) return <LoadingState message="Cargando usuario..." />;
+  if (loadError) return <ErrorState message={loadError} onRetry={() => navigate('/admin/users')} />;
 
   return (
-    <LayoutWithNav>
-      <SessionTimer />
-
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={() => navigate('/admin/users')}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              {isEdit ? 'Editar usuario' : 'Nuevo usuario'}
-            </h1>
-            <p className="text-slate-500 text-sm mt-1">
-              {isEdit ? 'Modifica los datos del usuario' : 'Crea un nuevo usuario en el sistema'}
-            </p>
-          </div>
+    <div className="max-w-2xl mx-auto space-y-8">
+      {/* Page header */}
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={() => navigate('/admin/users')}
+          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-2xl transition-all"
+        >
+          <ArrowLeft size={24} />
+        </button>
+        <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
+          <Users size={28} className="text-blue-600" />
         </div>
-
-        {/* Success message */}
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm mb-6 flex items-center gap-2">
-            <CheckCircle size={16} />
-            {success}
-          </div>
-        )}
-
-        {/* Error */}
-        {error && !loading && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Form */}
-        <div className="bg-white rounded-2xl shadow-sm p-8">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Nombre completo
-              </label>
-              <input
-                type="text"
-                value={formData.full_name}
-                onChange={(e) => handleChange('full_name', e.target.value)}
-                className={`w-full px-4 py-2.5 rounded-xl border ${
-                  fieldErrors.full_name ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                placeholder="Nombre del usuario"
-              />
-              {fieldErrors.full_name && (
-                <p className="text-red-500 text-xs mt-1">{fieldErrors.full_name}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Nombre de usuario
-              </label>
-              <input
-                type="text"
-                value={formData.username}
-                onChange={(e) => handleChange('username', e.target.value)}
-                disabled={isEdit}
-                className={`w-full px-4 py-2.5 rounded-xl border ${
-                  fieldErrors.username ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                  isEdit ? 'bg-slate-50 text-slate-400' : ''
-                }`}
-                placeholder="Usuario para iniciar sesión"
-              />
-              {fieldErrors.username && (
-                <p className="text-red-500 text-xs mt-1">{fieldErrors.username}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Correo electrónico
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleChange('email', e.target.value)}
-                className={`w-full px-4 py-2.5 rounded-xl border ${
-                  fieldErrors.email ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                placeholder="correo@ejemplo.com"
-              />
-              {fieldErrors.email && (
-                <p className="text-red-500 text-xs mt-1">{fieldErrors.email}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Rol
-              </label>
-              <select
-                value={formData.role}
-                onChange={(e) => handleChange('role', e.target.value)}
-                className={`w-full px-4 py-2.5 rounded-xl border ${
-                  fieldErrors.role ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white`}
-              >
-                {ROLES.map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
-              {fieldErrors.role && (
-                <p className="text-red-500 text-xs mt-1">{fieldErrors.role}</p>
-              )}
-            </div>
-
-            {!isEdit && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Contraseña
-                </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => handleChange('password', e.target.value)}
-                  className={`w-full px-4 py-2.5 rounded-xl border ${
-                    fieldErrors.password ? 'border-red-300 bg-red-50' : 'border-slate-200'
-                  } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                  placeholder="Mín. 8 caracteres, 1 mayúscula, 1 número, 1 especial"
-                />
-                {fieldErrors.password && (
-                  <p className="text-red-500 text-xs mt-1">{fieldErrors.password}</p>
-                )}
-              </div>
-            )}
-
-            {isEdit && (
-              <div className="flex items-center gap-3 py-2">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_active}
-                    onChange={(e) => handleChange('is_active', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
-                <span className="text-sm font-medium text-slate-700">Usuario activo</span>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex-1 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium flex items-center justify-center gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="animate-spin" size={18} />
-                    {isEdit ? 'Actualizando...' : 'Creando...'}
-                  </>
-                ) : isEdit ? (
-                  'Actualizar usuario'
-                ) : (
-                  'Crear usuario'
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/admin/users')}
-                className="px-6 py-2.5 border border-slate-200 text-slate-700 rounded-2xl hover:bg-slate-50 transition-all font-medium"
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {isEdit ? 'Editar Usuario' : 'Nuevo Usuario'}
+          </h1>
+          <p className="text-slate-500">
+            {isEdit ? 'Modifica los datos del usuario' : 'Crea un nuevo usuario en el sistema'}
+          </p>
         </div>
       </div>
-    </LayoutWithNav>
+
+      {/* Form */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        {/* API Error */}
+        {apiError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700">
+            <AlertCircle size={20} />
+            <span className="text-sm">{apiError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Full Name */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Nombre completo <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                setErrors({});
+              }}
+              className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${
+                errors.full_name ? 'border-red-300 bg-red-50' : 'border-slate-300'
+              }`}
+              placeholder="Ej: Juan Pérez"
+            />
+            {errors.full_name && (
+              <p className="text-red-500 text-xs mt-1">{errors.full_name}</p>
+            )}
+          </div>
+
+          {/* Username */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Nombre de usuario {!isEdit && <span className="text-red-500">*</span>}
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                setErrors({});
+              }}
+              disabled={isEdit}
+              className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${
+                isEdit ? 'bg-slate-50 text-slate-400' : ''
+              } ${errors.username ? 'border-red-300 bg-red-50' : 'border-slate-300'}`}
+              placeholder="Ej: jperez"
+            />
+            {errors.username && (
+              <p className="text-red-500 text-xs mt-1">{errors.username}</p>
+            )}
+            {isEdit && (
+              <p className="text-xs text-slate-400 mt-1">El nombre de usuario no se puede modificar</p>
+            )}
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Correo electrónico <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setErrors({});
+              }}
+              className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${
+                errors.email ? 'border-red-300 bg-red-50' : 'border-slate-300'
+              }`}
+              placeholder="Ej: juan@ejemplo.com"
+            />
+            {errors.email && (
+              <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+            )}
+          </div>
+
+          {/* Password (only for create) */}
+          {!isEdit && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Contraseña <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setErrors({});
+                    }}
+                    className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-10 ${
+                      errors.password ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                    }`}
+                    placeholder="Mínimo 8 caracteres"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+                )}
+                <p className="text-xs text-slate-400 mt-1">
+                  Mínimo 8 caracteres, 1 mayúscula, 1 número y 1 carácter especial
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Confirmar contraseña <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      setErrors({});
+                    }}
+                    className={`w-full px-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-10 ${
+                      errors.confirm_password ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                    }`}
+                    placeholder="Repite la contraseña"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {errors.confirm_password && (
+                  <p className="text-red-500 text-xs mt-1">{errors.confirm_password}</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Role */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Rol <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+            >
+              {ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Active (only for edit) */}
+          {isEdit && (
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="isActive" className="text-sm font-medium text-slate-700">
+                Usuario activo
+              </label>
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex items-center gap-4 pt-4">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Save size={20} />
+              {isSubmitting
+                ? 'Guardando...'
+                : isEdit
+                ? 'Guardar Cambios'
+                : 'Crear Usuario'}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/admin/users')}
+              className="px-6 py-2.5 bg-slate-100 text-slate-700 rounded-2xl hover:bg-slate-200 transition-all"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
-}
+};
+
+export default UserFormPage;

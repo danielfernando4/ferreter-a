@@ -1,155 +1,155 @@
+import type {
+  SetupStatusResponse,
+  SetupRequest,
+  SetupResponse,
+  LoginRequest,
+  LoginResponse,
+  MessageResponse,
+  UserMeResponse,
+  ChangePasswordRequest,
+  SessionCheckResponse,
+  SessionExtendResponse,
+  CreateUserRequest,
+  UpdateUserRequest,
+  UserResponse,
+} from '../types';
+
 const API_URL = '/api';
 
-export class ApiError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-    this.name = 'ApiError';
-  }
+function getToken(): string | null {
+  return localStorage.getItem('auth_token');
 }
 
-function getToken(): string | null {
-  return localStorage.getItem('token');
+export function setToken(token: string): void {
+  localStorage.setItem('auth_token', token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem('auth_token');
 }
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  queryParams?: Record<string, string>
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  let url = `${API_URL}${path}`;
+  if (queryParams) {
+    const params = new URLSearchParams();
+    Object.entries(queryParams).forEach(([key, value]) => {
+      params.append(key, value);
+    });
+    const qs = params.toString();
+    if (qs) url += `?${qs}`;
+  }
+
+  const response = await fetch(url, {
     ...options,
     headers,
   });
 
   if (!response.ok) {
-    let detail = 'Error en la solicitud';
+    let errorDetail = 'Error en la solicitud';
     try {
-      const errorData = await response.json();
-      detail = errorData.detail || detail;
+      const errorBody = await response.json();
+      if (errorBody && errorBody.detail) {
+        errorDetail = errorBody.detail;
+      }
     } catch {
-      // ignore parse error
+      errorDetail = `Error ${response.status}: ${response.statusText}`;
     }
-    throw new ApiError(detail, response.status);
+    throw new Error(errorDetail);
   }
 
-  if (response.status === 204) {
-    return undefined as T;
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    return response.json();
   }
-
-  return response.json();
+  return <T>{};
 }
 
 // Setup endpoints
-export function checkSetupStatus(): Promise<{ setup_required: boolean }> {
-  return request<{ setup_required: boolean }>('/setup/status');
+export async function checkSetupStatus(): Promise<SetupStatusResponse> {
+  return request<SetupStatusResponse>('/setup/status');
 }
 
-export function setupFirstAdmin(data: {
-  full_name: string;
-  username: string;
-  email: string;
-  password: string;
-}): Promise<{ message: string }> {
-  return request<{ message: string }>('/setup', {
+export async function setupFirstAdmin(data: SetupRequest): Promise<SetupResponse> {
+  return request<SetupResponse>('/setup', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
 // Auth endpoints
-export function login(data: {
-  username: string;
-  password: string;
-}): Promise<{ token: string; user: { full_name: string; username: string; email: string; role: string } }> {
-  return request<{ token: string; user: { full_name: string; username: string; email: string; role: string } }>('/auth/login', {
+export async function login(data: LoginRequest): Promise<LoginResponse> {
+  return request<LoginResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export function logout(): Promise<{ message: string }> {
-  return request<{ message: string }>('/auth/logout', {
+export async function logout(): Promise<MessageResponse> {
+  return request<MessageResponse>('/auth/logout', {
     method: 'POST',
   });
 }
 
-export function getMe(): Promise<{
-  id: string;
-  full_name: string;
-  username: string;
-  email: string;
-  role: string;
-  is_active: boolean;
-  created_at?: string;
-}> {
-  return request('/auth/me');
+export async function getMe(): Promise<UserMeResponse> {
+  return request<UserMeResponse>('/auth/me');
 }
 
-export function changePassword(data: {
-  current_password: string;
-  new_password: string;
-  confirm_password: string;
-}): Promise<{ message: string }> {
-  return request<{ message: string }>('/auth/change-password', {
+export async function changePassword(data: ChangePasswordRequest): Promise<MessageResponse> {
+  return request<MessageResponse>('/auth/change-password', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export function checkSession(): Promise<{ active: boolean; expires_at: string }> {
-  return request<{ active: boolean; expires_at: string }>('/auth/session/check');
+export async function checkSession(): Promise<SessionCheckResponse> {
+  return request<SessionCheckResponse>('/auth/session/check');
 }
 
-export function extendSession(): Promise<{ message: string; expires_at: string }> {
-  return request<{ message: string; expires_at: string }>('/auth/session/extend', {
+export async function extendSession(): Promise<SessionExtendResponse> {
+  return request<SessionExtendResponse>('/auth/session/extend', {
     method: 'POST',
   });
 }
 
 // Admin users endpoints
-export function listUsers(): Promise<any[]> {
-  return request<any[]>('/admin/users');
+export async function listUsers(): Promise<UserResponse[]> {
+  return request<UserResponse[]>('/admin/users');
 }
 
-export function getUser(userId: string): Promise<any> {
-  return request<any>(`/admin/users/${userId}`);
+export async function getUser(userId: string): Promise<UserResponse> {
+  return request<UserResponse>(`/admin/users/${userId}`);
 }
 
-export function createUser(data: {
-  full_name: string;
-  username: string;
-  email: string;
-  password: string;
-  role: string;
-}): Promise<any> {
-  return request<any>('/admin/users', {
+export async function createUser(data: CreateUserRequest): Promise<UserResponse> {
+  return request<UserResponse>('/admin/users', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export function updateUser(
-  userId: string,
-  data: { full_name: string; email: string; role: string; is_active: boolean }
-): Promise<any> {
-  return request<any>(`/admin/users/${userId}`, {
+export async function updateUser(userId: string, data: UpdateUserRequest): Promise<UserResponse> {
+  return request<UserResponse>(`/admin/users/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
-export function deleteUser(userId: string): Promise<{ message: string }> {
-  return request<{ message: string }>(`/admin/users/${userId}`, {
+export async function deleteUser(userId: string): Promise<MessageResponse> {
+  return request<MessageResponse>(`/admin/users/${userId}`, {
     method: 'DELETE',
   });
 }

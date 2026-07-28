@@ -7,98 +7,114 @@ export interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setupRequired: boolean;
   checkingSetup: boolean;
-}
-
-export interface AuthContextType extends AuthState {
-  login: (token: string, user: UserOut, remember: boolean) => void;
+  setupRequired: boolean;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (user: UserOut) => void;
 }
 
-export const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserOut | null>(null);
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-  });
+  const [token, setToken] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [setupRequired, setSetupRequired] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [setupRequired, setSetupRequired] = useState(false);
 
-  const isAuthenticated = !!user && !!token;
-
-  // Check setup status first
+  // Effect 1: Check setup status
   useEffect(() => {
-    async function checkSetup() {
+    let cancelled = false;
+    async function check() {
       try {
         const status = await authApi.checkSetup();
-        if (!status.setup_completed || !status.admin_exists) {
+        if (cancelled) return;
+        if (!status.setup_completed && !status.admin_exists) {
           setSetupRequired(true);
+          setCheckingSetup(false);
+          setIsLoading(false);
+          return;
         }
+        setSetupRequired(false);
       } catch {
-        // If setup check fails, assume setup is needed
-        setSetupRequired(true);
+        // Network error — keep setupRequired false, try loading user
+        if (!cancelled) {
+          setSetupRequired(false);
+        }
       } finally {
-        setCheckingSetup(false);
+        if (!cancelled) {
+          setCheckingSetup(false);
+          setIsLoading(false);
+        }
       }
     }
-    checkSetup();
+    check();
+    return () => { cancelled = true; };
   }, []);
 
-  // Validate token and load user
+  // Effect 2: Load user from stored token (runs after setup check)
   useEffect(() => {
-    if (setupRequired || checkingSetup) return;
+    if (checkingSetup) return;
+    if (setupRequired) return;
 
+    const storedToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+    if (!storedToken) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     async function loadUser() {
-      setIsLoading(true);
-      const storedToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-      if (!storedToken) {
-        setUser(null);
-        setToken(null);
-        setIsLoading(false);
-        return;
-      }
       try {
-        const userData = await authApi.me();
-        setUser(userData);
         setToken(storedToken);
+        const userData = await authApi.me();
+        if (cancelled) return;
+        setUser(userData);
+        setIsAuthenticated(true);
       } catch {
-        // Token invalid
-        localStorage.removeItem('auth_token');
-        sessionStorage.removeItem('auth_token');
-        setUser(null);
-        setToken(null);
+        // Token invalid or expired
+        if (!cancelled) {
+          localStorage.removeItem('auth_token');
+          sessionStorage.removeItem('auth_token');
+          setToken(null);
+          setUser(null);
+          setIsAuthenticated(false);
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     }
     loadUser();
-  }, [setupRequired, checkingSetup]);
+    return () => { cancelled = true; };
+  }, [checkingSetup, setupRequired]);
 
-  const login = useCallback((newToken: string, newUser: UserOut, remember: boolean) => {
+  const login = useCallback(async (email: string, password: string, remember?: boolean) => {
+    const response = await authApi.login({ email, password, remember: remember ?? false });
     if (remember) {
-      localStorage.setItem('auth_token', newToken);
+      localStorage.setItem('auth_token', response.token);
     } else {
-      sessionStorage.setItem('auth_token', newToken);
+      sessionStorage.setItem('auth_token', response.token);
     }
-    setToken(newToken);
-    setUser(newUser);
+    setToken(response.token);
+    setUser(response.usuario);
+    setIsAuthenticated(true);
   }, []);
 
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } catch {
-      // ignore logout errors
-    } finally {
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
-      setToken(null);
-      setUser(null);
+      // Ignore errors on logout
     }
+    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+    setToken(null);
+    setUser(null);
+    setIsAuthenticated(false);
   }, []);
 
   const updateUser = useCallback((updatedUser: UserOut) => {
@@ -112,8 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         isAuthenticated,
         isLoading,
-        setupRequired,
         checkingSetup,
+        setupRequired,
         login,
         logout,
         updateUser,

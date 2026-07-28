@@ -1,22 +1,32 @@
-"""Pydantic v2 schemas for Autenticación, Usuarios y Configuración Inicial."""
-
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
-# ─── Usuario ──────────────────────────────────────────────────────────────────
+# ────────────────────────────
+# Rol schemas
+# ────────────────────────────
+class RolOut(BaseModel):
+    id: int
+    nombre: str
+    descripcion: str
 
-class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+
+# ────────────────────────────
+# Usuario schemas
+# ────────────────────────────
+class UserOut(BaseModel):
     id: int
     nombre_completo: str
     email: str
-    rol: str  # nombre del rol, no el objeto ORM
+    rol: str  # nombre del rol, no objeto
     activo: bool
-    fecha_creacion: Optional[datetime] = None
+    fecha_creacion: datetime
     ultimo_acceso: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
     @field_validator("rol", mode="before")
     @classmethod
@@ -30,17 +40,22 @@ class UserCreateRequest(BaseModel):
     nombre_completo: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    rol: str = Field(..., pattern="^(administrador|vendedor|almacen)$")
+    rol: str  # validated against predefined roles
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdateRequest(BaseModel):
     nombre_completo: Optional[str] = Field(None, min_length=1, max_length=150)
     email: Optional[EmailStr] = None
-    rol: Optional[str] = Field(None, pattern="^(administrador|vendedor|almacen)$")
+    rol: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
-# ─── Autenticación ────────────────────────────────────────────────────────────
-
+# ────────────────────────────
+# Authentication schemas
+# ────────────────────────────
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -54,12 +69,9 @@ class LoginResponse(BaseModel):
     usuario: UserOut
 
 
-class LogoutResponse(BaseModel):
-    mensaje: str
-
-
-# ─── Setup ────────────────────────────────────────────────────────────────────
-
+# ────────────────────────────
+# Setup schemas
+# ────────────────────────────
 class SetupStatusResponse(BaseModel):
     setup_completed: bool
     admin_exists: bool
@@ -69,9 +81,9 @@ class SetupRequest(BaseModel):
     nombre_completo: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    negocio_nombre: str = Field(..., min_length=1, max_length=200)
+    negocio_nombre: str = Field(..., min_length=1)
     negocio_direccion: str = Field(..., min_length=1)
-    negocio_rfc: str = Field(..., min_length=1, max_length=20)
+    negocio_rfc: str = Field(..., min_length=1)
     negocio_telefono: Optional[str] = None
 
 
@@ -80,24 +92,23 @@ class SetupResponse(BaseModel):
     usuario: UserOut
 
 
-# ─── Preferencias ─────────────────────────────────────────────────────────────
-
+# ────────────────────────────
+# Preferences schemas
+# ────────────────────────────
 class PreferenciasOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     idioma: str = "es"
     tema_visual: str = "light"
     zona_horaria: str = "America/Mexico_City"
 
-    @field_validator("idioma", mode="before")
-    @classmethod
-    def extract_idioma(cls, v):
-        return v if isinstance(v, str) else str(v)
+    model_config = ConfigDict(from_attributes=True)
 
-    @field_validator("tema_visual", mode="before")
+    @field_validator("zona_horaria", mode="before")
     @classmethod
-    def extract_tema(cls, v):
-        return v if isinstance(v, str) else str(v)
+    def extract_zona_horaria(cls, v):
+        """Map configuracion_regional to zona_horaria for frontend compatibility."""
+        if v is None:
+            return "America/Mexico_City"
+        return v
 
 
 class PreferenciasUpdateRequest(BaseModel):
@@ -106,8 +117,9 @@ class PreferenciasUpdateRequest(BaseModel):
     zona_horaria: Optional[str] = None
 
 
-# ─── Recuperación de Contraseña ───────────────────────────────────────────────
-
+# ────────────────────────────
+# Password recovery schemas
+# ────────────────────────────
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -141,8 +153,9 @@ class ChangePasswordResponse(BaseModel):
     mensaje: str
 
 
-# ─── Respuestas Genéricas ─────────────────────────────────────────────────────
-
+# ────────────────────────────
+# Generic response schemas
+# ────────────────────────────
 class PaginatedUsersResponse(BaseModel):
     items: List[UserOut]
     total: int
@@ -159,3 +172,7 @@ class UserActionResponse(BaseModel):
 class PerfilResponse(BaseModel):
     usuario: UserOut
     preferencias: PreferenciasOut
+
+
+class LogoutResponse(BaseModel):
+    mensaje: str

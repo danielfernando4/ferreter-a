@@ -1,11 +1,14 @@
-// --- Esquemas de Usuario ---
+// ============================================================
+// Auth & Users Types
+// ============================================================
+
 export interface UserOut {
   id: number;
   nombre_completo: string;
   email: string;
-  rol: string; // "administrador" | "vendedor" | "almacen"
+  rol: string;
   activo: boolean;
-  fecha_registro: string; // datetime ISO string
+  fecha_registro: string;
   ultimo_acceso: string | null;
 }
 
@@ -22,7 +25,8 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
-// --- Esquemas de Autenticación ---
+// --- Auth ---
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -36,7 +40,8 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
-// --- Esquemas de Setup ---
+// --- Setup ---
+
 export interface SetupStatusResponse {
   setup_completed: boolean;
   admin_exists: boolean;
@@ -57,7 +62,8 @@ export interface SetupResponse {
   usuario: UserOut;
 }
 
-// --- Esquemas de Preferencias ---
+// --- Preferencias ---
+
 export interface PreferenciasOut {
   idioma: string;
   tema_visual: string;
@@ -70,7 +76,8 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
-// --- Esquemas de Recuperación ---
+// --- Password Recovery ---
+
 export interface ForgotPasswordRequest {
   email: string;
 }
@@ -104,7 +111,20 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
-// --- Esquemas de Respuesta Genéricos ---
+// --- Perfil ---
+
+export interface PerfilUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+}
+
+export interface PerfilResponse {
+  usuario: UserOut;
+  preferencias: PreferenciasOut;
+}
+
+// --- Generic ---
+
 export interface PaginatedUsersResponse {
   items: UserOut[];
   total: number;
@@ -116,11 +136,6 @@ export interface PaginatedUsersResponse {
 export interface UserActionResponse {
   mensaje: string;
   usuario: UserOut;
-}
-
-export interface PerfilResponse {
-  usuario: UserOut;
-  preferencias: PreferenciasOut;
 }
 
 export interface LogoutResponse {

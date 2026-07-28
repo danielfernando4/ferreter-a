@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requiredRole?: string[];
+  requiredRole?: string;
 }
 
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
@@ -25,15 +25,8 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user && !requiredRole.includes(user.rol)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Acceso Denegado</h2>
-          <p className="text-slate-600">No tienes permisos para acceder a esta página.</p>
-        </div>
-      </div>
-    );
+  if (requiredRole && user && user.rol !== requiredRole && user.rol !== 'administrador') {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

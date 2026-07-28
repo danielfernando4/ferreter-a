@@ -68,66 +68,63 @@ async function request<T>(
 //   };
 
 // ============================================================
-// Import types
+// API Endpoint Functions
 // ============================================================
 import type {
-  LoginRequest,
-  LoginResponse,
   SetupStatusResponse,
   SetupRequest,
   SetupResponse,
+  LoginRequest,
+  LoginResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   VerifyTokenResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
-  ChangePasswordRequest,
-  ChangePasswordResponse,
-  PaginatedUsersResponse,
   UserOut,
   UserCreateRequest,
   UserUpdateRequest,
+  PaginatedUsersResponse,
   UserActionResponse,
   PerfilResponse,
+  PerfilUpdateRequest,
+  ChangePasswordRequest,
+  ChangePasswordResponse,
   PreferenciasOut,
   PreferenciasUpdateRequest,
   LogoutResponse,
 } from '../types/auth';
 
-// ============================================================
-// Auth API (Public + Protected)
-// ============================================================
+// --- Auth API ---
 export const authApi = {
   checkSetup: () => request<SetupStatusResponse>('GET', '/auth/check-setup'),
   setup: (data: SetupRequest) => request<SetupResponse>('POST', '/auth/setup', data),
   login: (data: LoginRequest) => request<LoginResponse>('POST', '/auth/login', data),
-  forgotPassword: (data: ForgotPasswordRequest) => request<ForgotPasswordResponse>('POST', '/auth/forgot-password', data),
-  verifyResetToken: (token: string) => request<VerifyTokenResponse>('GET', `/auth/verify-reset-token/${token}`),
-  resetPassword: (data: ResetPasswordRequest) => request<ResetPasswordResponse>('POST', '/auth/reset-password', data),
   me: () => request<UserOut>('GET', '/auth/me'),
   logout: () => request<LogoutResponse>('POST', '/auth/logout'),
+  forgotPassword: (data: ForgotPasswordRequest) =>
+    request<ForgotPasswordResponse>('POST', '/auth/forgot-password', data),
+  verifyResetToken: (token: string) =>
+    request<VerifyTokenResponse>('GET', `/auth/verify-reset-token/${token}`),
+  resetPassword: (data: ResetPasswordRequest) =>
+    request<ResetPasswordResponse>('POST', '/auth/reset-password', data),
 };
 
-// ============================================================
-// Usuarios API (Admin)
-// ============================================================
+// --- Usuarios API ---
 export const usuariosApi = {
   list: (params?: { search?: string; page?: number; page_size?: number }) =>
     request<PaginatedUsersResponse>('GET', '/usuarios', undefined, params as Record<string, string | number | boolean | undefined | null>),
-  getById: (id: number) => request<UserOut>('GET', `/usuarios/${id}`),
+  get: (id: number) => request<UserOut>('GET', `/usuarios/${id}`),
   create: (data: UserCreateRequest) => request<UserOut>('POST', '/usuarios', data),
   update: (id: number, data: UserUpdateRequest) => request<UserOut>('PUT', `/usuarios/${id}`, data),
   deactivate: (id: number) => request<UserActionResponse>('PATCH', `/usuarios/${id}/deactivate`),
   reactivate: (id: number) => request<UserActionResponse>('PATCH', `/usuarios/${id}/reactivate`),
 };
 
-// ============================================================
-// Perfil API
-// ============================================================
+// --- Perfil API ---
 export const perfilApi = {
   get: () => request<PerfilResponse>('GET', '/perfil'),
-  update: (data: { nombre_completo?: string; email?: string }) =>
-    request<UserOut>('PUT', '/perfil', data),
+  update: (data: PerfilUpdateRequest) => request<UserOut>('PUT', '/perfil', data),
   changePassword: (data: ChangePasswordRequest) =>
     request<ChangePasswordResponse>('PUT', '/perfil/cambiar-password', data),
   getPreferencias: () => request<PreferenciasOut>('GET', '/perfil/preferencias'),

@@ -1,31 +1,35 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import type { ReactNode } from 'react';
+import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
-  children: ReactNode;
+  children: React.ReactNode;
   requiredRole?: string;
 }
 
-export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, user } = useAuth();
+export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
+  const { isAuthenticated, isLoading, user, setupRequired, isCheckingSetup } = useAuth();
 
-  if (isLoading) {
+  if (isCheckingSetup || isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
-          <p className="text-slate-500 text-sm">Verificando sesión...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+          <p className="text-sm text-slate-500">Verificando sesión...</p>
         </div>
       </div>
     );
+  }
+
+  if (setupRequired) {
+    return <Navigate to="/setup-wizard" replace />;
   }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user && user.rol !== requiredRole && user.rol !== 'administrador') {
+  if (requiredRole && user?.rol !== requiredRole) {
     return <Navigate to="/" replace />;
   }
 

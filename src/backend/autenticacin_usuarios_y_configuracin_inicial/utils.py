@@ -1,77 +1,54 @@
 import hashlib
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
-import jwt
 
 from config import settings
 
 
-# ─── Password Hashing ──────────────────────────────────────────────────
-
 def _normalize_password(pw: str) -> str:
+    """SHA-256 normalize to avoid bcrypt 72-byte truncation."""
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
 
 
 def hash_password(pw: str) -> str:
+    """Hash a password with bcrypt after SHA-256 normalization."""
     normalized = _normalize_password(pw).encode()
     return bcrypt.hashpw(normalized, bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
+    """Verify a password against a bcrypt hash."""
     normalized = _normalize_password(plain).encode()
     return bcrypt.checkpw(normalized, hashed.encode())
 
 
-# ─── Token Generation ──────────────────────────────────────────────────
-
-def generate_random_token() -> str:
-    """Generate a cryptographically secure random token."""
-    return secrets.token_urlsafe(48)
+def generate_token_string() -> str:
+    """Generate a cryptographically secure random token string."""
+    return str(uuid.uuid4()) + secrets.token_hex(32)
 
 
 def hash_token(token: str) -> str:
-    """Hash a token for secure storage."""
+    """Hash a token for secure storage using SHA-256."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def create_jwt_token(usuario_id: int, email: str, rol: str, remember: bool = False) -> str:
-    """Create a JWT access token."""
+def create_access_token(remember: bool = False) -> tuple[str, str, datetime]:
+    """Generate an access token and return (raw_token, hashed_token, expires_at)."""
+    raw_token = generate_token_string()
+    hashed = hash_token(raw_token)
     if remember:
-        expire_minutes = settings.REMEMBER_TOKEN_EXPIRE_DAYS * 24 * 60
+        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REMEMBER_TOKEN_EXPIRE_DAYS)
     else:
-        expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
-    payload = {
-        "sub": str(usuario_id),
-        "email": email,
-        "rol": rol,
-        "exp": expire,
-        "iat": datetime.now(timezone.utc),
-        "type": "access",
-    }
-    token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return token
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return raw_token, hashed, expires_at
 
 
-def decode_jwt_token(token: str) -> dict | None:
-    """Decode and validate a JWT token. Returns payload dict or None if invalid."""
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        return payload
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None
-
-
-def get_token_expires_in(token: str) -> int:
-    """Get remaining seconds until token expiration."""
-    payload = decode_jwt_token(token)
-    if payload is None:
-        return 0
-    exp = payload.get("exp")
-    if exp is None:
-        return 0
-    remaining = exp - datetime.now(timezone.utc).timestamp()
-    return max(0, int(remaining))
+def create_reset_token() -> tuple[str, str, datetime]:
+    """Generate a password reset token and return (raw_token, hashed_token, expires_at)."""
+    raw_token = generate_token_string()
+    hashed = hash_token(raw_token)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.RESET_TOKEN_EXPIRE_HOURS)
+    return raw_token, hashed, expires_at

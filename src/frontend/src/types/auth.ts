@@ -21,11 +21,6 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
-export interface SetupStatusResponse {
-  setup_completed: boolean;
-  admin_exists: boolean;
-}
-
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -41,30 +36,9 @@ export interface SetupResponse {
   usuario: UserOut;
 }
 
-export interface UserCreateRequest {
-  nombre_completo: string;
-  email: string;
-  password: string;
-  rol: string;
-}
-
-export interface UserUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-  rol?: string;
-}
-
-export interface PaginatedUsersResponse {
-  items: UserOut[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
-
-export interface UserActionResponse {
-  mensaje: string;
-  usuario: UserOut;
+export interface SetupStatusResponse {
+  setup_completed: boolean;
+  admin_exists: boolean;
 }
 
 export interface ForgotPasswordRequest {
@@ -90,6 +64,42 @@ export interface ResetPasswordResponse {
   mensaje: string;
 }
 
+export interface UserCreateRequest {
+  nombre_completo: string;
+  email: string;
+  password: string;
+  rol: string;
+}
+
+export interface UserUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+  rol?: string;
+}
+
+export interface UserActionResponse {
+  mensaje: string;
+  usuario: UserOut;
+}
+
+export interface PaginatedUsersResponse {
+  items: UserOut[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface PerfilResponse {
+  usuario: UserOut;
+  preferencias: PreferenciasOut;
+}
+
+export interface PerfilUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+}
+
 export interface ChangePasswordRequest {
   current_password: string;
   new_password: string;
@@ -110,16 +120,6 @@ export interface PreferenciasUpdateRequest {
   idioma?: string;
   tema_visual?: string;
   zona_horaria?: string;
-}
-
-export interface PerfilResponse {
-  usuario: UserOut;
-  preferencias: PreferenciasOut;
-}
-
-export interface PerfilUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
 }
 
 export interface LogoutResponse {

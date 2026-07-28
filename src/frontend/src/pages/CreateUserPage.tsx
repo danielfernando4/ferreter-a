@@ -1,64 +1,38 @@
 import { useNavigate } from 'react-router-dom';
-import { AppLayout } from '../components/layout/AppLayout';
-import { UserForm } from '../components/users/UserForm';
 import * as api from '../services/api';
+import UserForm from '../components/users/UserForm';
 import { ArrowLeft } from 'lucide-react';
-import { useState } from 'react';
 
-export function CreateUserPage() {
+export default function CreateUserPage() {
   const navigate = useNavigate();
-  const [error, setError] = useState('');
 
-  const handleSave = async (data: Record<string, string>) => {
-    setError('');
-    try {
-      await api.createUsuario({
-        nombre_completo: data.nombre_completo,
-        email: data.email,
-        password: data.password,
-        rol: data.rol,
-      });
-      navigate('/usuarios');
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'status' in err) {
-        const apiErr = err as { status: number; message: string };
-        if (apiErr.status === 409) {
-          setError('El correo electrónico ya está registrado');
-        } else if (apiErr.status === 400) {
-          setError(apiErr.message || 'Datos inválidos');
-        } else {
-          setError('Error al crear el usuario');
-        }
-      } else {
-        setError('Error al conectar con el servidor');
-      }
-      throw err;
-    }
+  const handleSave = async (data: { nombre_completo: string; email: string; password?: string; rol: string }) => {
+    await api.createUsuario({
+      nombre_completo: data.nombre_completo,
+      email: data.email,
+      password: data.password || '',
+      rol: data.rol,
+    });
+    navigate('/usuarios');
   };
 
   return (
-    <AppLayout title="Crear Usuario">
-      <div className="max-w-2xl">
+    <div className="max-w-lg mx-auto space-y-6">
+      <div>
         <button
           onClick={() => navigate('/usuarios')}
-          className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-6 transition-all"
+          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors mb-4"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-4 w-4" />
           Volver a usuarios
         </button>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:p-8">
-          <h2 className="text-lg font-semibold text-slate-900 mb-6">Nuevo usuario</h2>
-
-          {error && (
-            <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          <UserForm mode="create" onSave={handleSave} />
-        </div>
+        <h1 className="text-2xl font-bold text-slate-900">Nuevo usuario</h1>
+        <p className="text-sm text-slate-500 mt-1">Crea un nuevo usuario en el sistema</p>
       </div>
-    </AppLayout>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+        <UserForm mode="create" onSave={handleSave} />
+      </div>
+    </div>
   );
 }

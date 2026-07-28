@@ -1,113 +1,73 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AppLayout } from '../components/layout/AppLayout';
-import { UserForm } from '../components/users/UserForm';
 import * as api from '../services/api';
-import type { UserOut } from '../types/auth';
-import { ArrowLeft, AlertCircle } from 'lucide-react';
+import UserForm from '../components/users/UserForm';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
-export function EditUserPage() {
+export default function EditUserPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [user, setUser] = useState<UserOut | null>(null);
+  const [initialData, setInitialData] = useState<{ nombre_completo: string; email: string; rol: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
-    if (!id) {
-      setError('ID de usuario no proporcionado');
-      setIsLoading(false);
-      return;
-    }
-
     async function loadUser() {
+      if (!id) return;
       try {
-        const data = await api.getUsuario(Number(id));
-        setUser(data);
-      } catch {
-        setError('Error al cargar los datos del usuario');
-      } finally {
-        setIsLoading(false);
+        const user = await api.getUsuario(Number(id));
+        setInitialData({
+          nombre_completo: user.nombre_completo,
+          email: user.email,
+          rol: user.rol,
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Error al cargar usuario';
+        setError(msg);
       }
+      setIsLoading(false);
     }
     loadUser();
   }, [id]);
 
-  const handleSave = async (data: Record<string, string>) => {
-    if (!id) return;
-    setSaveError('');
-    try {
-      await api.updateUsuario(Number(id), {
-        nombre_completo: data.nombre_completo,
-        email: data.email,
-        rol: data.rol,
-      });
-      navigate('/usuarios');
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'status' in err) {
-        const apiErr = err as { status: number; message: string };
-        if (apiErr.status === 409) {
-          setSaveError('El correo electrónico ya está registrado');
-        } else if (apiErr.status === 404) {
-          setSaveError('Usuario no encontrado');
-        } else {
-          setSaveError(apiErr.message || 'Error al actualizar');
-        }
-      } else {
-        setSaveError('Error al conectar con el servidor');
-      }
-      throw err;
-    }
+  const handleSave = async (data: { nombre_completo: string; email: string; password?: string; rol: string }) => {
+    await api.updateUsuario(Number(id), {
+      nombre_completo: data.nombre_completo,
+      email: data.email,
+      rol: data.rol,
+    });
+    navigate('/usuarios');
   };
 
   return (
-    <AppLayout title="Editar Usuario">
-      <div className="max-w-2xl">
+    <div className="max-w-lg mx-auto space-y-6">
+      <div>
         <button
           onClick={() => navigate('/usuarios')}
-          className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-6 transition-all"
+          className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 transition-colors mb-4"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-4 w-4" />
           Volver a usuarios
         </button>
+        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
+        <p className="text-sm text-slate-500 mt-1">Modifica los datos del usuario</p>
+      </div>
 
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
         {isLoading ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-            <div className="animate-pulse space-y-4">
-              <div className="h-6 bg-slate-200 rounded w-1/3" />
-              <div className="h-10 bg-slate-200 rounded" />
-              <div className="h-10 bg-slate-200 rounded" />
-              <div className="h-10 bg-slate-200 rounded" />
-            </div>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
           </div>
-        ) : error || !user ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-            <div className="flex items-center gap-3 text-red-700">
-              <AlertCircle className="w-5 h-5" />
-              <p className="text-sm">{error || 'Usuario no encontrado'}</p>
-            </div>
+        ) : error ? (
+          <div className="text-center py-8">
+            <p className="text-red-600 text-sm">{error}</p>
           </div>
+        ) : initialData ? (
+          <UserForm initialData={initialData} mode="edit" onSave={handleSave} />
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:p-8">
-            <h2 className="text-lg font-semibold text-slate-900 mb-6">
-              Editar: {user.nombre_completo || ''}
-            </h2>
-
-            {saveError && (
-              <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-                {saveError}
-              </div>
-            )}
-
-            <UserForm
-              mode="edit"
-              initialData={user}
-              onSave={handleSave}
-            />
-          </div>
+          <p className="text-center text-slate-500 text-sm">Usuario no encontrado</p>
         )}
       </div>
-    </AppLayout>
+    </div>
   );
 }

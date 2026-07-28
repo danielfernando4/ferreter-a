@@ -1,95 +1,62 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Check, ChevronRight, ChevronLeft, User } from 'lucide-react';
 import * as api from '../../services/api';
-
-interface FormData {
-  nombre_completo: string;
-  email: string;
-  password: string;
-  confirm_password: string;
-  negocio_nombre: string;
-  negocio_direccion: string;
-  negocio_rfc: string;
-  negocio_telefono: string;
-}
+import { Loader2, AlertCircle, Check, ArrowRight, ArrowLeft, Store, User } from 'lucide-react';
 
 interface SetupWizardFormProps {
-  onComplete: () => void;
+  onComplete?: () => void;
 }
 
-export function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
+export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [formData, setFormData] = useState<FormData>({
-    nombre_completo: '',
-    email: '',
-    password: '',
-    confirm_password: '',
-    negocio_nombre: '',
-    negocio_direccion: '',
-    negocio_rfc: '',
-    negocio_telefono: '',
-  });
 
-  const updateField = (field: keyof FormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  // Step 1: Admin account
+  const [nombreCompleto, setNombreCompleto] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Step 2: Business data
+  const [negocioNombre, setNegocioNombre] = useState('');
+  const [negocioDireccion, setNegocioDireccion] = useState('');
+  const [negocioRfc, setNegocioRfc] = useState('');
+  const [negocioTelefono, setNegocioTelefono] = useState('');
+
+  const validateStep1 = (): string | null => {
+    if (!nombreCompleto.trim()) return 'El nombre completo es obligatorio';
+    if (!email.trim()) return 'El correo electrónico es obligatorio';
+    if (!password) return 'La contraseña es obligatoria';
+    if (password.length < 6) return 'La contraseña debe tener al menos 6 caracteres';
+    if (password !== confirmPassword) return 'Las contraseñas no coinciden';
+    return null;
   };
 
-  const validateStep1 = (): boolean => {
-    if (!formData.nombre_completo.trim()) {
-      setError('El nombre completo es obligatorio');
-      return false;
-    }
-    if (!formData.email.trim()) {
-      setError('El correo electrónico es obligatorio');
-      return false;
-    }
-    if (!formData.password) {
-      setError('La contraseña es obligatoria');
-      return false;
-    }
-    if (formData.password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
-      return false;
-    }
-    if (formData.password !== formData.confirm_password) {
-      setError('Las contraseñas no coinciden');
-      return false;
-    }
-    return true;
-  };
-
-  const validateStep2 = (): boolean => {
-    if (!formData.negocio_nombre.trim()) {
-      setError('El nombre del negocio es obligatorio');
-      return false;
-    }
-    if (!formData.negocio_direccion.trim()) {
-      setError('La dirección es obligatoria');
-      return false;
-    }
-    if (!formData.negocio_rfc.trim()) {
-      setError('El RFC es obligatorio');
-      return false;
-    }
-    return true;
+  const validateStep2 = (): string | null => {
+    if (!negocioNombre.trim()) return 'El nombre del negocio es obligatorio';
+    if (!negocioDireccion.trim()) return 'La dirección es obligatoria';
+    if (!negocioRfc.trim()) return 'El RFC es obligatorio';
+    return null;
   };
 
   const handleNext = () => {
     setError('');
-    if (step === 1 && validateStep1()) {
+    if (step === 1) {
+      const err = validateStep1();
+      if (err) { setError(err); return; }
       setStep(2);
-    } else if (step === 2 && validateStep2()) {
+    } else if (step === 2) {
+      const err = validateStep2();
+      if (err) { setError(err); return; }
       setStep(3);
     }
   };
 
-  const handlePrev = () => {
+  const handleBack = () => {
     setError('');
-    setStep((prev) => prev - 1);
+    setStep((s) => s - 1);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -98,53 +65,44 @@ export function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
     setIsLoading(true);
     try {
       await api.runSetup({
-        nombre_completo: formData.nombre_completo,
-        email: formData.email,
-        password: formData.password,
-        negocio_nombre: formData.negocio_nombre,
-        negocio_direccion: formData.negocio_direccion,
-        negocio_rfc: formData.negocio_rfc,
-        negocio_telefono: formData.negocio_telefono || null,
+        nombre_completo: nombreCompleto.trim(),
+        email: email.trim(),
+        password,
+        negocio_nombre: negocioNombre.trim(),
+        negocio_direccion: negocioDireccion.trim(),
+        negocio_rfc: negocioRfc.trim(),
+        negocio_telefono: negocioTelefono.trim() || null,
       });
-      onComplete();
-      navigate('/login', { replace: true });
+      if (onComplete) onComplete();
+      navigate('/login');
     } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'status' in err) {
-        const apiErr = err as { status: number; message: string };
-        if (apiErr.status === 409) {
-          setError('La configuración inicial ya fue completada');
-        } else {
-          setError(apiErr.message || 'Error al guardar la configuración');
-        }
-      } else {
-        setError('Error al conectar con el servidor');
-      }
-    } finally {
-      setIsLoading(false);
+      const msg = err instanceof Error ? err.message : 'Error al guardar la configuración';
+      setError(msg);
     }
+    setIsLoading(false);
   };
 
   return (
     <div className="w-full max-w-lg mx-auto">
       {/* Steps indicator */}
-      <div className="flex items-center justify-center gap-2 mb-8">
+      <div className="flex items-center justify-center mb-8 space-x-2">
         {[1, 2, 3].map((s) => (
-          <div key={s} className="flex items-center gap-2">
+          <div key={s} className="flex items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                 s === step
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-slate-900 text-white'
                   : s < step
-                  ? 'bg-green-500 text-white'
-                  : 'bg-slate-200 text-slate-500'
+                  ? 'bg-slate-200 text-slate-500'
+                  : 'bg-slate-100 text-slate-400'
               }`}
             >
-              {s < step ? <Check className="w-4 h-4" /> : s}
+              {s < step ? <Check className="h-4 w-4" /> : s}
             </div>
             {s < 3 && (
               <div
-                className={`w-8 h-0.5 ${
-                  s < step ? 'bg-green-500' : 'bg-slate-200'
+                className={`w-12 h-0.5 mx-1 ${
+                  s < step ? 'bg-slate-900' : 'bg-slate-200'
                 }`}
               />
             )}
@@ -152,221 +110,200 @@ export function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
         ))}
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+        <div className="flex items-center gap-3 mb-6">
+          {step === 1 && <User className="h-6 w-6 text-slate-700" />}
+          {step === 2 && <Store className="h-6 w-6 text-slate-700" />}
+          {step === 3 && <Check className="h-6 w-6 text-slate-700" />}
+          <h2 className="text-xl font-semibold text-slate-900">
+            {step === 1 && 'Cuenta de Administrador'}
+            {step === 2 && 'Datos del Negocio'}
+            {step === 3 && 'Resumen y Confirmación'}
+          </h2>
+        </div>
+
         {error && (
-          <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-            {error}
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm mb-4">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
-        {step === 1 && (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
-                <User className="w-5 h-5" />
+        <form onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()} className="space-y-4">
+          {step === 1 && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Nombre completo
+                </label>
+                <input
+                  type="text"
+                  value={nombreCompleto}
+                  onChange={(e) => setNombreCompleto(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
+                  placeholder="Juan Pérez"
+                  disabled={isLoading}
+                />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Cuenta de Administrador</h2>
-                <p className="text-sm text-slate-500">Cree la cuenta principal del sistema</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre completo</label>
-              <input
-                type="text"
-                value={formData.nombre_completo}
-                onChange={(e) => updateField('nombre_completo', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-                placeholder="Nombre del administrador"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Correo electrónico</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => updateField('email', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-                placeholder="admin@ejemplo.com"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Contraseña</label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => updateField('password', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-                placeholder="Mínimo 6 caracteres"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirmar contraseña</label>
-              <input
-                type="password"
-                value={formData.confirm_password}
-                onChange={(e) => updateField('confirm_password', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-                placeholder="Repita la contraseña"
-                disabled={isLoading}
-              />
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 rounded-xl bg-green-100 text-green-600">
-                <Building2 className="w-5 h-5" />
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Correo electrónico
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
+                  placeholder="admin@ejemplo.com"
+                  disabled={isLoading}
+                />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Datos del Negocio</h2>
-                <p className="text-sm text-slate-500">Configure los datos de su establecimiento</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre del negocio</label>
-              <input
-                type="text"
-                value={formData.negocio_nombre}
-                onChange={(e) => updateField('negocio_nombre', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-                placeholder="Ferretería"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Dirección</label>
-              <input
-                type="text"
-                value={formData.negocio_direccion}
-                onChange={(e) => updateField('negocio_direccion', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-                placeholder="Calle, número, colonia, ciudad"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">RFC</label>
-              <input
-                type="text"
-                value={formData.negocio_rfc}
-                onChange={(e) => updateField('negocio_rfc', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-                placeholder="RFC del negocio"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Teléfono (opcional)</label>
-              <input
-                type="text"
-                value={formData.negocio_telefono}
-                onChange={(e) => updateField('negocio_telefono', e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-                placeholder="Teléfono del negocio"
-                disabled={isLoading}
-              />
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 rounded-xl bg-purple-100 text-purple-600">
-                <Check className="w-5 h-5" />
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Contraseña
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
+                  placeholder="••••••••"
+                  disabled={isLoading}
+                />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Resumen</h2>
-                <p className="text-sm text-slate-500">Verifique los datos antes de finalizar</p>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Confirmar contraseña
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
+                  placeholder="••••••••"
+                  disabled={isLoading}
+                />
               </div>
-            </div>
+            </>
+          )}
 
-            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-              <h3 className="font-medium text-slate-900">Cuenta de Administrador</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <span className="text-slate-500">Nombre:</span>
-                <span className="text-slate-900 font-medium">{formData.nombre_completo}</span>
-                <span className="text-slate-500">Email:</span>
-                <span className="text-slate-900 font-medium">{formData.email}</span>
+          {step === 2 && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Nombre del negocio
+                </label>
+                <input
+                  type="text"
+                  value={negocioNombre}
+                  onChange={(e) => setNegocioNombre(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
+                  placeholder="Ferretería El Martillo"
+                  disabled={isLoading}
+                />
               </div>
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Dirección
+                </label>
+                <input
+                  type="text"
+                  value={negocioDireccion}
+                  onChange={(e) => setNegocioDireccion(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
+                  placeholder="Calle Principal #123"
+                  disabled={isLoading}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  RFC
+                </label>
+                <input
+                  type="text"
+                  value={negocioRfc}
+                  onChange={(e) => setNegocioRfc(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
+                  placeholder="XAXX010101000"
+                  disabled={isLoading}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Teléfono <span className="text-slate-400 font-normal">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={negocioTelefono}
+                  onChange={(e) => setNegocioTelefono(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
+                  placeholder="555-123-4567"
+                  disabled={isLoading}
+                />
+              </div>
+            </>
+          )}
 
-            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-              <h3 className="font-medium text-slate-900">Datos del Negocio</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <span className="text-slate-500">Nombre:</span>
-                <span className="text-slate-900 font-medium">{formData.negocio_nombre}</span>
-                <span className="text-slate-500">Dirección:</span>
-                <span className="text-slate-900 font-medium">{formData.negocio_direccion}</span>
-                <span className="text-slate-500">RFC:</span>
-                <span className="text-slate-900 font-medium">{formData.negocio_rfc}</span>
-                {formData.negocio_telefono && (
-                  <>
-                    <span className="text-slate-500">Teléfono:</span>
-                    <span className="text-slate-900 font-medium">{formData.negocio_telefono}</span>
-                  </>
+          {step === 3 && (
+            <div className="space-y-3">
+              <div className="bg-slate-50 rounded-xl p-4">
+                <h3 className="text-sm font-semibold text-slate-700 mb-2">Administrador</h3>
+                <p className="text-sm text-slate-600">{nombreCompleto}</p>
+                <p className="text-sm text-slate-600">{email}</p>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4">
+                <h3 className="text-sm font-semibold text-slate-700 mb-2">Negocio</h3>
+                <p className="text-sm text-slate-600">{negocioNombre}</p>
+                <p className="text-sm text-slate-600">{negocioDireccion}</p>
+                <p className="text-sm text-slate-600">RFC: {negocioRfc}</p>
+                {negocioTelefono && (
+                  <p className="text-sm text-slate-600">Tel: {negocioTelefono}</p>
                 )}
               </div>
             </div>
+          )}
+
+          <div className="flex justify-between pt-4">
+            {step > 1 ? (
+              <button
+                type="button"
+                onClick={handleBack}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-all"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Atrás
+              </button>
+            ) : (
+              <div />
+            )}
+
+            {step < 3 ? (
+              <button
+                type="button"
+                onClick={handleNext}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 transition-all shadow-sm"
+              >
+                Siguiente
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-50 transition-all shadow-sm"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                {isLoading ? 'Guardando...' : 'Completar configuración'}
+              </button>
+            )}
           </div>
-        )}
-
-        <div className="flex justify-between mt-8">
-          {step > 1 ? (
-            <button
-              type="button"
-              onClick={handlePrev}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all disabled:opacity-50"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Anterior
-            </button>
-          ) : (
-            <div />
-          )}
-
-          {step < 3 ? (
-            <button
-              type="button"
-              onClick={handleNext}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all"
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  Finalizar
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }

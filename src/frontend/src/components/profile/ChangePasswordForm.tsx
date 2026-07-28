@@ -1,39 +1,40 @@
-import { useState } from 'react';
-import { changePassword } from '../../services/api';
+import { useState, type FormEvent } from 'react';
 import { Loader2 } from 'lucide-react';
+import { changePassword } from '../../services/api';
 
-export function ChangePasswordForm() {
+export default function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPasswords, setShowPasswords] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
     if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+      setError('Las contraseñas nuevas no coinciden');
       return;
     }
 
     setIsLoading(true);
     try {
-      await changePassword({ current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword });
-      setSuccess('Contraseña actualizada exitosamente');
+      const res = await changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      setSuccess(res.mensaje || 'Contraseña actualizada exitosamente');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al cambiar contraseña';
-      setError(message);
+      const msg = err instanceof Error ? err.message : 'Error al cambiar contraseña';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -41,15 +42,13 @@ export function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <h4 className="font-medium text-slate-900">Cambiar contraseña</h4>
-
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-2xl text-sm">
+        <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">
           {success}
         </div>
       )}
@@ -57,43 +56,54 @@ export function ChangePasswordForm() {
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Contraseña actual</label>
         <input
-          type="password"
+          type={showPasswords ? 'text' : 'password'}
           value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
+          onChange={e => setCurrentPassword(e.target.value)}
           required
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Nueva contraseña</label>
         <input
-          type="password"
+          type={showPasswords ? 'text' : 'password'}
           value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
+          onChange={e => setNewPassword(e.target.value)}
           required
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          minLength={6}
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirmar nueva contraseña</label>
         <input
-          type="password"
+          type={showPasswords ? 'text' : 'password'}
           value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
+          onChange={e => setConfirmPassword(e.target.value)}
           required
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
         />
       </div>
+
+      <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={showPasswords}
+          onChange={e => setShowPasswords(e.target.checked)}
+          className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+        />
+        Mostrar contraseñas
+      </label>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all text-sm font-medium flex items-center gap-2"
+        className="py-2.5 px-6 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
       >
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-        {isLoading ? 'Guardando...' : 'Cambiar contraseña'}
+        {isLoading && <Loader2 size={18} className="animate-spin" />}
+        {isLoading ? 'Cambiando...' : 'Cambiar contraseña'}
       </button>
     </form>
   );

@@ -2,37 +2,32 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 
-from database import Base, engine, async_session
-
-from autenticacin_usuarios_y_configuracin_inicial.routes import router as auth_router
+from database import engine, Base, async_session
+from autenticacin_usuarios_y_configuracin_inicial.models import (
+    Rol,
+    Usuario,
+    ConfiguracionNegocio,
+    PreferenciasUsuario,
+    TokenSesion,
+    TokenRestablecimiento,
+)
+from autenticacin_usuarios_y_configuracin_inicial.routes import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables and seed roles if needed
+    # Startup: create all tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-    # Seed default roles
-    async with async_session() as session:
-        from autenticacin_usuarios_y_configuracin_inicial.models import Rol
-
-        result = await session.execute(text("SELECT COUNT(*) FROM roles"))
-        count = result.scalar()
-        if count == 0:
-            session.add_all([
-                Rol(nombre="administrador", descripcion="Acceso total al sistema. Gestión de usuarios, configuración y reportes."),
-                Rol(nombre="vendedor", descripcion="Acceso al punto de venta y consulta de inventario."),
-                Rol(nombre="almacen", descripcion="Acceso a inventario y órdenes de compra."),
-            ])
-            await session.commit()
     yield
+    # Shutdown: dispose engine
+    await engine.dispose()
 
 
 app = FastAPI(
-    title="Ferretería - Sistema de Gestión",
+    title="Ferretera - Sistema de Gestión",
+    description="API de Autenticación, Usuarios y Configuración Inicial",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -46,10 +41,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
-app.include_router(auth_router, prefix="/api/autenticacin_usuarios_y_configuracin_inicial")
+# Register router
+app.include_router(router, prefix="/api/autenticacin_usuarios_y_configuracin_inicial")
 
 
-@app.get("/api/health")
-async def health_check():
+@app.get("/health")
+async def health():
     return {"status": "ok"}

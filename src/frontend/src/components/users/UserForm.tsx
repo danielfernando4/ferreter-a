@@ -1,60 +1,42 @@
-import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import type { UserOut, UserCreateRequest, UserUpdateRequest } from '../../types/auth';
+import { createUsuario, updateUsuario } from '../../services/api';
 
 interface UserFormProps {
-  initialData?: UserOut | null;
-  onSave: (data: UserCreateRequest | UserUpdateRequest) => Promise<void>;
+  initialData?: UserOut;
+  onSave: () => void;
   mode: 'create' | 'edit';
 }
 
-const roles = ['administrador', 'vendedor', 'almacen'];
-
-export function UserForm({ initialData, onSave, mode }: UserFormProps) {
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
+export default function UserForm({ initialData, onSave, mode }: UserFormProps) {
+  const [nombre, setNombre] = useState(initialData?.nombre_completo || '');
+  const [email, setEmail] = useState(initialData?.email || '');
   const [password, setPassword] = useState('');
-  const [rol, setRol] = useState('vendedor');
+  const [rol, setRol] = useState(initialData?.rol || 'vendedor');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (initialData) {
-      setNombre(initialData.nombre_completo);
-      setEmail(initialData.email);
-      setRol(initialData.rol);
-    }
-  }, [initialData]);
-
-  const validate = (): string[] => {
-    const errs: string[] = [];
-    if (!nombre.trim()) errs.push('El nombre es obligatorio');
-    if (!email.trim()) errs.push('El email es obligatorio');
-    if (mode === 'create' && !password) errs.push('La contraseña es obligatoria');
-    if (mode === 'create' && password && password.length < 6) errs.push('La contraseña debe tener al menos 6 caracteres');
-    if (!rol) errs.push('El rol es obligatorio');
-    return errs;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const validationErrors = validate();
-    if (validationErrors.length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-    setErrors([]);
+    setError('');
     setIsLoading(true);
     try {
       if (mode === 'create') {
-        await onSave({ nombre_completo: nombre.trim(), email: email.trim(), password, rol } as UserCreateRequest);
+        const data: UserCreateRequest = { nombre_completo: nombre, email, password, rol };
+        await createUsuario(data);
       } else {
         const data: UserUpdateRequest = {};
-        if (nombre !== initialData?.nombre_completo) data.nombre_completo = nombre.trim();
-        if (email !== initialData?.email) data.email = email.trim();
+        if (nombre !== initialData?.nombre_completo) data.nombre_completo = nombre;
+        if (email !== initialData?.email) data.email = email;
         if (rol !== initialData?.rol) data.rol = rol;
-        await onSave(data);
+        if (initialData) await updateUsuario(initialData.id, data);
       }
+      onSave();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar usuario';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -62,76 +44,70 @@ export function UserForm({ initialData, onSave, mode }: UserFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {errors.length > 0 && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm space-y-1">
-          {errors.map((err, i) => (
-            <p key={i}>{err}</p>
-          ))}
+      {error && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
         </div>
       )}
 
       <div>
-        <label htmlFor="nombre" className="block text-sm font-medium text-slate-700 mb-1.5">
-          Nombre completo
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre completo</label>
         <input
-          id="nombre"
           type="text"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={e => setNombre(e.target.value)}
           required
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
           placeholder="Nombre del usuario"
         />
       </div>
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
-          Correo electrónico
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Correo electrónico</label>
         <input
-          id="email"
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={e => setEmail(e.target.value)}
           required
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
           placeholder="correo@ejemplo.com"
         />
       </div>
 
       {mode === 'create' && (
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
-            Contraseña
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required={mode === 'create'}
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
-            placeholder="••••••••"
-          />
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Contraseña</label>
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm pr-10"
+              placeholder="Mínimo 6 caracteres"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </div>
       )}
 
       <div>
-        <label htmlFor="rol" className="block text-sm font-medium text-slate-700 mb-1.5">
-          Rol
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Rol</label>
         <select
-          id="rol"
           value={rol}
-          onChange={(e) => setRol(e.target.value)}
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all bg-white"
+          onChange={e => setRol(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm bg-white"
         >
-          {roles.map((r) => (
-            <option key={r} value={r}>
-              {r.charAt(0).toUpperCase() + r.slice(1)}
-            </option>
-          ))}
+          <option value="administrador">Administrador</option>
+          <option value="vendedor">Vendedor</option>
+          <option value="almacen">Almacén</option>
         </select>
       </div>
 
@@ -139,9 +115,9 @@ export function UserForm({ initialData, onSave, mode }: UserFormProps) {
         <button
           type="submit"
           disabled={isLoading}
-          className="px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all text-sm font-medium flex items-center gap-2"
+          className="flex-1 py-2.5 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {isLoading && <Loader2 size={18} className="animate-spin" />}
           {isLoading ? 'Guardando...' : mode === 'create' ? 'Crear usuario' : 'Guardar cambios'}
         </button>
       </div>

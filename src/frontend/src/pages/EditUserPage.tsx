@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { getUsuario, updateUsuario } from '../services/api';
-import { UserForm } from '../components/users/UserForm';
-import { LoadingState } from '../components/ui/LoadingState';
-import { ErrorState } from '../components/ui/ErrorState';
-import { ArrowLeft } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { getUsuario } from '../services/api';
 import type { UserOut } from '../types/auth';
+import UserForm from '../components/users/UserForm';
 
-export function EditUserPage() {
+export default function EditUserPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [user, setUser] = useState<UserOut | null>(null);
@@ -16,54 +14,57 @@ export function EditUserPage() {
 
   useEffect(() => {
     if (!id) return;
-    const load = async () => {
-      try {
-        const data = await getUsuario(Number(id));
-        setUser(data);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Error al cargar usuario';
-        setError(message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    load();
+    setIsLoading(true);
+    getUsuario(Number(id))
+      .then(setUser)
+      .catch(err => {
+        const msg = err instanceof Error ? err.message : 'Error al cargar usuario';
+        setError(msg);
+      })
+      .finally(() => setIsLoading(false));
   }, [id]);
 
-  const handleSave = async (data: Parameters<typeof updateUsuario>[1]) => {
-    if (!id) return;
-    await updateUsuario(Number(id), data);
-    navigate('/usuarios');
-  };
-
   if (isLoading) {
-    return <LoadingState message="Cargando datos del usuario..." />;
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={24} className="animate-spin text-slate-400" />
+      </div>
+    );
   }
 
-  if (error) {
-    return <ErrorState message={error} onRetry={() => window.location.reload()} />;
+  if (error || !user) {
+    return (
+      <div className="max-w-lg mx-auto">
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error || 'Usuario no encontrado'}
+        </div>
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="mt-4 text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1"
+        >
+          <ArrowLeft size={16} />
+          Volver a usuarios
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
+    <div className="max-w-lg mx-auto space-y-6">
+      <div>
         <button
-          type="button"
           onClick={() => navigate('/usuarios')}
-          className="p-2 rounded-2xl border border-slate-300 text-slate-600 hover:bg-slate-50 transition-all"
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-colors mb-2"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft size={16} />
+          Volver a usuarios
         </button>
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Editar usuario</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Editando a {user?.nombre_completo || ''}
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
+        <p className="text-sm text-slate-500 mt-1">Editando a {user.nombre_completo}</p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 max-w-lg">
-        <UserForm initialData={user} mode="edit" onSave={handleSave} />
+      <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
+        <UserForm initialData={user} mode="edit" onSave={() => navigate('/usuarios')} />
       </div>
     </div>
   );

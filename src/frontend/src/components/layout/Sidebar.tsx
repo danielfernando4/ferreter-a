@@ -1,51 +1,67 @@
 import { NavLink } from 'react-router-dom';
-import { Users, UserCircle, LayoutDashboard, Store } from 'lucide-react';
-import { useAuth } from '../../hooks/useAuth';
+import { Users, UserCircle, LayoutDashboard, X } from 'lucide-react';
 
-const links = [
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/usuarios', label: 'Usuarios', icon: Users },
   { to: '/perfil', label: 'Perfil', icon: UserCircle },
 ];
 
-export function Sidebar() {
-  const { user } = useAuth();
-
+export default function Sidebar({ open, onClose }: SidebarProps) {
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 min-h-screen shadow-sm">
-      <div className="p-6 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 rounded-2xl p-2">
-            <Store className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="font-bold text-slate-900">Ferretería</h2>
-            <p className="text-xs text-slate-500 capitalize">{user?.rol || 'Usuario'}</p>
-          </div>
+    <>
+      {/* Overlay for mobile */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 z-20 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      <aside
+        className={`
+          fixed top-0 left-0 z-30 h-full w-64 bg-white border-r border-slate-200
+          transform transition-transform duration-200 ease-in-out
+          lg:translate-x-0 lg:static lg:z-auto
+          ${open ? 'translate-x-0' : '-translate-x-full'}
+        `}
+      >
+        <div className="flex items-center justify-between h-16 px-6 border-b border-slate-200">
+          <span className="text-lg font-bold text-slate-900">Ferretería</span>
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1 rounded-lg hover:bg-slate-100 text-slate-500"
+          >
+            <X size={20} />
+          </button>
         </div>
-      </div>
-      <nav className="p-4 space-y-1">
-        {links.map((link) => {
-          const Icon = link.icon;
-          return (
+
+        <nav className="p-4 space-y-1">
+          {navItems.map(item => (
             <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.to === '/'}
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              onClick={onClose}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-medium transition-all ${
+                `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`
               }
             >
-              <Icon className="w-5 h-5" />
-              {link.label}
+              <item.icon size={20} />
+              {item.label}
             </NavLink>
-          );
-        })}
-      </nav>
-    </aside>
+          ))}
+        </nav>
+      </aside>
+    </>
   );
 }

@@ -1,18 +1,20 @@
+import bcrypt
 import hashlib
 import secrets
+import hashlib
 from datetime import datetime, timedelta, timezone
-
-import bcrypt
+from typing import Optional
 
 from config import settings
 
+
+# ───── Password Hashing (bcrypt with SHA-256 pre-hash to avoid 72-byte truncation) ─────
 
 def _normalize_password(pw: str) -> str:
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
 
 
 def hash_password(pw: str) -> str:
-    # SHA-256 pre-hash prevents bcrypt 72-byte truncation
     normalized = _normalize_password(pw).encode()
     return bcrypt.hashpw(normalized, bcrypt.gensalt()).decode()
 
@@ -21,6 +23,8 @@ def verify_password(plain: str, hashed: str) -> bool:
     normalized = _normalize_password(plain).encode()
     return bcrypt.checkpw(normalized, hashed.encode())
 
+
+# ───── Token Generation ─────
 
 def generate_token() -> str:
     """Generate a cryptographically secure random token."""
@@ -32,16 +36,19 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def get_token_expiration(persistent: bool = False) -> datetime:
-    """Get expiration datetime for a token."""
-    if persistent:
-        delta = timedelta(days=settings.TOKEN_EXPIRATION_PERSISTENT_DAYS)
-    else:
-        delta = timedelta(minutes=settings.TOKEN_EXPIRATION_MINUTES)
-    return datetime.now(timezone.utc) + delta
+def get_token_expiry(remember: bool = False) -> datetime:
+    """Get expiry datetime for a token."""
+    if remember:
+        return datetime.now(timezone.utc) + timedelta(days=settings.REMEMBER_TOKEN_EXPIRE_DAYS)
+    return datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
 
-def get_reset_token_expiration() -> datetime:
-    """Get expiration datetime for a reset token."""
-    delta = timedelta(hours=settings.RESET_TOKEN_EXPIRATION_HOURS)
-    return datetime.now(timezone.utc) + delta
+def get_reset_token_expiry() -> datetime:
+    """Get expiry datetime for a reset token."""
+    return datetime.now(timezone.utc) + timedelta(hours=settings.RESET_TOKEN_EXPIRE_HOURS)
+
+
+def get_expires_in_seconds(expiry: datetime) -> int:
+    """Calculate seconds until expiry."""
+    diff = expiry - datetime.now(timezone.utc)
+    return max(0, int(diff.total_seconds()))

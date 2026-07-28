@@ -1,37 +1,35 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, type FormEvent } from 'react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { resetPassword } from '../../services/api';
-import { Loader2 } from 'lucide-react';
 
 interface ResetPasswordFormProps {
   token: string;
+  onSuccess?: () => void;
 }
 
-export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
-  const navigate = useNavigate();
+export default function ResetPasswordForm({ token, onSuccess }: ResetPasswordFormProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+
     if (newPassword !== confirmPassword) {
       setError('Las contraseñas no coinciden');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
+
     setIsLoading(true);
     try {
       await resetPassword({ token, new_password: newPassword, confirm_password: confirmPassword });
-      navigate('/login', { state: { passwordReset: true } });
+      onSuccess?.();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al restablecer contraseña';
-      setError(message);
+      const msg = err instanceof Error ? err.message : 'Error al restablecer la contraseña';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -40,48 +38,58 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
           {error}
         </div>
       )}
 
       <div>
-        <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 mb-1.5">
+        <label htmlFor="new-password" className="block text-sm font-medium text-slate-700 mb-1.5">
           Nueva contraseña
         </label>
-        <input
-          id="newPassword"
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          required
-          placeholder="••••••••"
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-        />
+        <div className="relative">
+          <input
+            id="new-password"
+            type={showPassword ? 'text' : 'password'}
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            placeholder="Mínimo 6 caracteres"
+            required
+            minLength={6}
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
       </div>
 
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-1.5">
+        <label htmlFor="confirm-password" className="block text-sm font-medium text-slate-700 mb-1.5">
           Confirmar contraseña
         </label>
         <input
-          id="confirmPassword"
+          id="confirm-password"
           type="password"
           value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
+          onChange={e => setConfirmPassword(e.target.value)}
+          placeholder="Repite la contraseña"
           required
-          placeholder="••••••••"
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all text-sm font-medium flex items-center justify-center gap-2"
+        className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-        {isLoading ? 'Guardando...' : 'Restablecer contraseña'}
+        {isLoading && <Loader2 size={18} className="animate-spin" />}
+        {isLoading ? 'Restableciendo...' : 'Restablecer contraseña'}
       </button>
     </form>
   );

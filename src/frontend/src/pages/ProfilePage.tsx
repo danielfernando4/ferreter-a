@@ -1,87 +1,113 @@
 import { useState, useEffect } from 'react';
-import { getPerfil, updatePerfil, updatePreferencias, getPreferencias } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
-import { ProfileForm } from '../components/profile/ProfileForm';
-import { ChangePasswordForm } from '../components/profile/ChangePasswordForm';
-import { PreferencesForm } from '../components/profile/PreferencesForm';
-import { LoadingState } from '../components/ui/LoadingState';
-import { ErrorState } from '../components/ui/ErrorState';
-import { UserCircle } from 'lucide-react';
-import type { PreferenciasOut, UserOut } from '../types/auth';
+import { Loader2, User, Key, Settings } from 'lucide-react';
+import { getPerfil } from '../services/api';
+import type { PerfilResponse } from '../types/auth';
+import ProfileForm from '../components/profile/ProfileForm';
+import ChangePasswordForm from '../components/profile/ChangePasswordForm';
+import PreferencesForm from '../components/profile/PreferencesForm';
 
-export function ProfilePage() {
-  const { user, updateUser } = useAuth();
-  const [preferencias, setPreferencias] = useState<PreferenciasOut | null>(null);
+type Tab = 'perfil' | 'password' | 'preferencias';
+
+export default function ProfilePage() {
+  const [data, setData] = useState<PerfilResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<Tab>('perfil');
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const perfilData = await getPerfil();
-        updateUser(perfilData.usuario);
-        setPreferencias(perfilData.preferencias);
-      } catch {
-        // Try loading preferencias separately
-        try {
-          const prefs = await getPreferencias();
-          setPreferencias(prefs);
-        } catch {
-          setPreferencias({ idioma: 'es', tema_visual: 'light', zona_horaria: 'America/Mexico_City' });
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    load();
-  }, [updateUser]);
-
-  const handleProfileSave = async (data: { nombre_completo?: string; email?: string }) => {
-    const updated = await updatePerfil(data);
-    updateUser(updated);
-  };
-
-  const handlePreferencesSave = async (data: { idioma?: string; tema_visual?: string; zona_horaria?: string }) => {
-    const updated = await updatePreferencias(data);
-    setPreferencias(updated);
-  };
+    getPerfil()
+      .then(setData)
+      .catch(err => {
+        const msg = err instanceof Error ? err.message : 'Error al cargar perfil';
+        setError(msg);
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
 
   if (isLoading) {
-    return <LoadingState message="Cargando perfil..." />;
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={24} className="animate-spin text-slate-400" />
+      </div>
+    );
   }
 
   if (error) {
-    return <ErrorState message={error} onRetry={() => window.location.reload()} />;
+    return (
+      <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+        {error}
+      </div>
+    );
   }
 
+  const tabs: { id: Tab; label: string; icon: typeof User }[] = [
+    { id: 'perfil', label: 'Datos personales', icon: User },
+    { id: 'password', label: 'Contraseña', icon: Key },
+    { id: 'preferencias', label: 'Preferencias', icon: Settings },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="bg-blue-100 rounded-full p-2">
-          <UserCircle className="w-6 h-6 text-blue-600" />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Mi Perfil</h2>
-          <p className="text-sm text-slate-500 mt-1">Gestiona tu información personal y preferencias</p>
-        </div>
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Mi Perfil</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Gestiona tu información personal y preferencias
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <ProfileForm user={user as UserOut} onSave={handleProfileSave} />
+      {/* User info card */}
+      {data && (
+        <div className="bg-white rounded-2xl shadow-sm p-6 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-xl font-bold">
+            {data.usuario.nombre_completo?.charAt(0)?.toUpperCase() || 'U'}
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <ChangePasswordForm />
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">{data.usuario.nombre_completo}</h2>
+            <p className="text-sm text-slate-500">{data.usuario.email}</p>
+            <span className="inline-block mt-1 px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 capitalize">
+              {data.usuario.rol}
+            </span>
           </div>
         </div>
-        <div className="space-y-6">
-          {preferencias && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-              <PreferencesForm preferencias={preferencias} onSave={handlePreferencesSave} />
-            </div>
-          )}
-        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-white rounded-2xl shadow-sm p-1">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex-1 justify-center ${
+              activeTab === tab.id
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
+        {activeTab === 'perfil' && data && (
+          <ProfileForm
+            user={data.usuario}
+            onSave={() => {
+              getPerfil().then(setData).catch(() => {});
+            }}
+          />
+        )}
+        {activeTab === 'password' && <ChangePasswordForm />}
+        {activeTab === 'preferencias' && data && (
+          <PreferencesForm
+            preferencias={data.preferencias}
+            onSave={prefs => {
+              setData(prev => prev ? { ...prev, preferencias: prefs } : prev);
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,8 +1,12 @@
-import { LogOut, User, Settings } from 'lucide-react';
+import { Menu, LogOut, User } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
-export function Navbar() {
+interface NavbarProps {
+  onMenuClick: () => void;
+}
+
+export default function Navbar({ onMenuClick }: NavbarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -12,36 +16,37 @@ export function Navbar() {
   };
 
   return (
-    <nav className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-sm">
-      <div className="flex items-center gap-3">
-        <h1 className="text-xl font-bold text-slate-900">Ferretería</h1>
-      </div>
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6">
+      <button
+        onClick={onMenuClick}
+        className="lg:hidden p-2 rounded-xl hover:bg-slate-100 text-slate-600"
+      >
+        <Menu size={22} />
+      </button>
+
+      <div className="hidden lg:block" />
+
       <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center text-sm font-semibold">
+            {user?.nombre_completo?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
+          <div className="hidden sm:block">
+            <p className="text-sm font-medium text-slate-900">
+              {user?.nombre_completo || 'Usuario'}
+            </p>
+            <p className="text-xs text-slate-500 capitalize">{user?.rol || ''}</p>
+          </div>
+        </div>
+
         <button
-          type="button"
-          onClick={() => navigate('/perfil')}
-          className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-all"
-        >
-          <User className="w-4 h-4" />
-          <span className="hidden sm:inline">{user?.nombre_completo || 'Perfil'}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/usuarios')}
-          className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-all"
-        >
-          <Settings className="w-4 h-4" />
-          <span className="hidden sm:inline">Usuarios</span>
-        </button>
-        <button
-          type="button"
           onClick={handleLogout}
-          className="flex items-center gap-2 text-sm text-red-600 hover:text-red-700 transition-all"
+          className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-red-600 transition-colors"
+          title="Cerrar sesión"
         >
-          <LogOut className="w-4 h-4" />
-          <span className="hidden sm:inline">Salir</span>
+          <LogOut size={20} />
         </button>
       </div>
-    </nav>
+    </header>
   );
 }

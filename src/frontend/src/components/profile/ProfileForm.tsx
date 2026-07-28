@@ -1,42 +1,39 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { UserOut } from '../../types/auth';
+import { updatePerfil } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 interface ProfileFormProps {
   user: UserOut;
-  onSave: (data: { nombre_completo?: string; email?: string }) => Promise<void>;
+  onSave: () => void;
 }
 
-export function ProfileForm({ user, onSave }: ProfileFormProps) {
+export default function ProfileForm({ user, onSave }: ProfileFormProps) {
+  const { updateUser } = useAuth();
   const [nombre, setNombre] = useState(user.nombre_completo);
   const [email, setEmail] = useState(user.email);
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setErrors([]);
-    setSuccess('');
-    const errs: string[] = [];
-    if (!nombre.trim()) errs.push('El nombre es obligatorio');
-    if (!email.trim()) errs.push('El email es obligatorio');
-    if (errs.length > 0) {
-      setErrors(errs);
-      return;
-    }
+    setError('');
     setIsLoading(true);
     try {
       const data: { nombre_completo?: string; email?: string } = {};
-      if (nombre !== user.nombre_completo) data.nombre_completo = nombre.trim();
-      if (email !== user.email) data.email = email.trim();
-      if (Object.keys(data).length > 0) {
-        await onSave(data);
+      if (nombre !== user.nombre_completo) data.nombre_completo = nombre;
+      if (email !== user.email) data.email = email;
+      if (Object.keys(data).length === 0) {
+        onSave();
+        return;
       }
-      setSuccess('Perfil actualizado exitosamente');
+      const updated = await updatePerfil(data);
+      updateUser(updated);
+      onSave();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al actualizar perfil';
-      setErrors([message]);
+      const msg = err instanceof Error ? err.message : 'Error al actualizar perfil';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -44,16 +41,9 @@ export function ProfileForm({ user, onSave }: ProfileFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {errors.length > 0 && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm space-y-1">
-          {errors.map((err, i) => (
-            <p key={i}>{err}</p>
-          ))}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-2xl text-sm">
-          {success}
+      {error && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
         </div>
       )}
 
@@ -62,8 +52,9 @@ export function ProfileForm({ user, onSave }: ProfileFormProps) {
         <input
           type="text"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          onChange={e => setNombre(e.target.value)}
+          required
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
         />
       </div>
 
@@ -72,17 +63,18 @@ export function ProfileForm({ user, onSave }: ProfileFormProps) {
         <input
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          onChange={e => setEmail(e.target.value)}
+          required
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all text-sm font-medium flex items-center gap-2"
+        className="py-2.5 px-6 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
       >
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isLoading && <Loader2 size={18} className="animate-spin" />}
         {isLoading ? 'Guardando...' : 'Guardar cambios'}
       </button>
     </form>

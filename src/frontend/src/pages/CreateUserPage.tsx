@@ -1,34 +1,26 @@
 import { useNavigate } from 'react-router-dom';
-import { createUsuario } from '../services/api';
-import { UserForm } from '../components/users/UserForm';
 import { ArrowLeft } from 'lucide-react';
+import UserForm from '../components/users/UserForm';
 
-export function CreateUserPage() {
+export default function CreateUserPage() {
   const navigate = useNavigate();
 
-  const handleSave = async (data: Parameters<typeof createUsuario>[0]) => {
-    await createUsuario(data);
-    navigate('/usuarios');
-  };
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
+    <div className="max-w-lg mx-auto space-y-6">
+      <div>
         <button
-          type="button"
           onClick={() => navigate('/usuarios')}
-          className="p-2 rounded-2xl border border-slate-300 text-slate-600 hover:bg-slate-50 transition-all"
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-colors mb-2"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft size={16} />
+          Volver a usuarios
         </button>
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Nuevo usuario</h2>
-          <p className="text-sm text-slate-500 mt-1">Crea un nuevo usuario en el sistema</p>
-        </div>
+        <h1 className="text-2xl font-bold text-slate-900">Nuevo usuario</h1>
+        <p className="text-sm text-slate-500 mt-1">Crea un nuevo usuario en el sistema</p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 max-w-lg">
-        <UserForm mode="create" onSave={handleSave} />
+      <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
+        <UserForm mode="create" onSave={() => navigate('/usuarios')} />
       </div>
     </div>
   );

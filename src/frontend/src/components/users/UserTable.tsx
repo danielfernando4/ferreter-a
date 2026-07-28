@@ -1,4 +1,4 @@
-import { Edit, Trash2, UserCheck } from 'lucide-react';
+import { Pencil, UserX } from 'lucide-react';
 import type { UserOut } from '../../types/auth';
 
 interface UserTableProps {
@@ -7,11 +7,17 @@ interface UserTableProps {
   onDeactivate: (user: UserOut) => void;
 }
 
-export function UserTable({ usuarios, onEdit, onDeactivate }: UserTableProps) {
+const rolColors: Record<string, string> = {
+  administrador: 'bg-purple-100 text-purple-700',
+  vendedor: 'bg-blue-100 text-blue-700',
+  almacen: 'bg-amber-100 text-amber-700',
+};
+
+export default function UserTable({ usuarios, onEdit, onDeactivate }: UserTableProps) {
   if (usuarios.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-500 text-sm">
-        No se encontraron usuarios
+      <div className="text-center py-12">
+        <p className="text-slate-500">No hay usuarios registrados</p>
       </div>
     );
   }
@@ -28,44 +34,52 @@ export function UserTable({ usuarios, onEdit, onDeactivate }: UserTableProps) {
             <th className="text-right py-3 px-4 font-medium text-slate-500">Acciones</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
-          {usuarios.map((user) => (
-            <tr key={user.id} className="hover:bg-slate-50 transition-all">
-              <td className="py-3 px-4 font-medium text-slate-900">{user.nombre_completo}</td>
+        <tbody>
+          {usuarios.map(user => (
+            <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <td className="py-3 px-4">
+                <span className="font-medium text-slate-900">{user.nombre_completo}</span>
+              </td>
               <td className="py-3 px-4 text-slate-600">{user.email}</td>
               <td className="py-3 px-4">
-                <span className="capitalize text-xs font-medium px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
+                <span
+                  className={`inline-block px-2.5 py-1 rounded-lg text-xs font-medium capitalize ${
+                    rolColors[user.rol] || 'bg-slate-100 text-slate-700'
+                  }`}
+                >
                   {user.rol}
                 </span>
               </td>
               <td className="py-3 px-4">
-                {user.activo ? (
-                  <span className="flex items-center gap-1 text-xs font-medium text-green-700">
-                    <UserCheck className="w-3.5 h-3.5" />
-                    Activo
-                  </span>
-                ) : (
-                  <span className="text-xs font-medium text-slate-400">Inactivo</span>
-                )}
+                <span
+                  className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                    user.activo ? 'text-green-600' : 'text-red-600'
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      user.activo ? 'bg-green-500' : 'bg-red-500'
+                    }`}
+                  />
+                  {user.activo ? 'Activo' : 'Inactivo'}
+                </span>
               </td>
               <td className="py-3 px-4">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-1">
                   <button
-                    type="button"
                     onClick={() => onEdit(user)}
-                    className="p-2 rounded-2xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                    className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-all"
                     title="Editar usuario"
                   >
-                    <Edit className="w-4 h-4" />
+                    <Pencil size={16} />
                   </button>
                   {user.activo && (
                     <button
-                      type="button"
                       onClick={() => onDeactivate(user)}
-                      className="p-2 rounded-2xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all"
+                      className="p-2 rounded-lg hover:bg-red-50 text-slate-500 hover:text-red-600 transition-all"
                       title="Desactivar usuario"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <UserX size={16} />
                     </button>
                   )}
                 </div>

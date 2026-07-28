@@ -8,19 +8,6 @@ export interface UserOut {
   ultimo_acceso: string | null;
 }
 
-export interface UserCreateRequest {
-  nombre_completo: string;
-  email: string;
-  password: string;
-  rol: string;
-}
-
-export interface UserUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-  rol?: string;
-}
-
 export interface LoginRequest {
   email: string;
   password: string;
@@ -46,7 +33,7 @@ export interface SetupRequest {
   negocio_nombre: string;
   negocio_direccion: string;
   negocio_rfc: string;
-  negocio_telefono?: string;
+  negocio_telefono?: string | null;
 }
 
 export interface SetupResponse {
@@ -77,18 +64,17 @@ export interface ResetPasswordResponse {
   mensaje: string;
 }
 
-export interface ChangePasswordRequest {
-  current_password: string;
-  new_password: string;
-  confirm_password: string;
+export interface UserCreateRequest {
+  nombre_completo: string;
+  email: string;
+  password: string;
+  rol: string;
 }
 
-export interface ChangePasswordResponse {
-  mensaje: string;
-}
-
-export interface LogoutResponse {
-  mensaje: string;
+export interface UserUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+  rol?: string;
 }
 
 export interface PaginatedUsersResponse {
@@ -104,6 +90,26 @@ export interface UserActionResponse {
   usuario: UserOut;
 }
 
+export interface PerfilResponse {
+  usuario: UserOut;
+  preferencias: PreferenciasOut;
+}
+
+export interface PerfilUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}
+
+export interface ChangePasswordResponse {
+  mensaje: string;
+}
+
 export interface PreferenciasOut {
   idioma: string;
   tema_visual: string;
@@ -116,19 +122,13 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
-export interface PerfilResponse {
-  usuario: UserOut;
-  preferencias: PreferenciasOut;
-}
-
-export interface PerfilUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-}
-
 export interface AuthState {
   user: UserOut | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+}
+
+export interface LogoutResponse {
+  mensaje: string;
 }

@@ -1,64 +1,53 @@
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, Users, UserCircle } from 'lucide-react';
+import { Users, UserCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-const moduleLinks = [
-  {
-    to: '/usuarios',
-    label: 'Usuarios',
-    description: 'Gestionar usuarios del sistema',
-    icon: Users,
-    color: 'bg-blue-50 text-blue-600',
-    roles: ['administrador'],
-  },
-  {
-    to: '/perfil',
-    label: 'Mi Perfil',
-    description: 'Ver y editar tu perfil',
-    icon: UserCircle,
-    color: 'bg-green-50 text-green-600',
-    roles: ['administrador', 'vendedor', 'almacen'],
-  },
-];
-
-export function HomePage() {
+export default function HomePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const cards = [
+    {
+      title: 'Usuarios',
+      description: 'Gestiona los usuarios del sistema',
+      icon: Users,
+      path: '/usuarios',
+      color: 'bg-blue-500',
+    },
+    {
+      title: 'Mi Perfil',
+      description: 'Ver y editar tu perfil',
+      icon: UserCircle,
+      path: '/perfil',
+      color: 'bg-purple-500',
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="bg-blue-100 rounded-full p-2">
-          <LayoutDashboard className="w-6 h-6 text-blue-600" />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Dashboard</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Bienvenido, {user?.nombre_completo || 'Usuario'}
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">
+          Bienvenido, {user?.nombre_completo || 'Usuario'}
+        </h1>
+        <p className="text-sm text-slate-500 mt-1">
+          Panel principal de Ferretería
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {moduleLinks
-          .filter((m) => user && (m.roles.includes(user.rol) || user.rol === 'administrador'))
-          .map((module) => {
-            const Icon = module.icon;
-            return (
-              <button
-                key={module.to}
-                type="button"
-                onClick={() => navigate(module.to)}
-                className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-md hover:border-blue-200 transition-all text-left"
-              >
-                <div className={`w-12 h-12 rounded-2xl ${module.color} flex items-center justify-center mb-4`}>
-                  <Icon className="w-6 h-6" />
-                </div>
-                <h3 className="font-semibold text-slate-900">{module.label}</h3>
-                <p className="text-sm text-slate-500 mt-1">{module.description}</p>
-              </button>
-            );
-          })}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {cards.map(card => (
+          <button
+            key={card.path}
+            onClick={() => navigate(card.path)}
+            className="bg-white rounded-2xl shadow-sm p-6 hover:shadow-md transition-all text-left"
+          >
+            <div className={`w-12 h-12 rounded-xl ${card.color} flex items-center justify-center mb-4`}>
+              <card.icon size={24} className="text-white" />
+            </div>
+            <h3 className="font-semibold text-slate-900">{card.title}</h3>
+            <p className="text-sm text-slate-500 mt-1">{card.description}</p>
+          </button>
+        ))}
       </div>
     </div>
   );

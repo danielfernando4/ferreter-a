@@ -1,24 +1,19 @@
-import os
+import secrets
+from datetime import timedelta
 
 
 class Settings:
-    APP_NAME: str = "Ferretería - Sistema de Gestión"
-    VERSION: str = "1.0.0"
-
-    # Token settings
-    TOKEN_EXPIRATION_MINUTES: int = 60
-    TOKEN_EXPIRATION_PERSISTENT_DAYS: int = 30
-    RESET_TOKEN_EXPIRATION_HOURS: int = 1
-
-    # Database
-    DATABASE_URL: str = "sqlite+aiosqlite:///./ferretera.db"
-
-    # SMTP (placeholder - no real sending in MVP)
-    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
-    SMTP_USER: str = os.getenv("SMTP_USER", "")
-    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-    SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@ferreteria.local")
+    SECRET_KEY: str = secrets.token_hex(32)
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REMEMBER_TOKEN_EXPIRE_DAYS: int = 30
+    RESET_TOKEN_EXPIRE_HOURS: int = 1
+    ROLES: list[str] = ["administrador", "vendedor", "almacen"]
+    ROLES_MAP: dict[str, str] = {
+        "administrador": "Administrador",
+        "vendedor": "Vendedor / Cajero",
+        "almacen": "Almacén / Comprador",
+    }
 
 
 settings = Settings()

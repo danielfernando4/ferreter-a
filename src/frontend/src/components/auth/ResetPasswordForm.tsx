@@ -1,45 +1,25 @@
-import { useState, useEffect, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import * as api from '../../services/api';
-import { Loader2, AlertCircle, Check, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { resetPassword } from '../../services/api';
 
 interface ResetPasswordFormProps {
   token: string;
+  onSuccess: () => void;
 }
 
-export default function ResetPasswordForm({ token }: ResetPasswordFormProps) {
-  const navigate = useNavigate();
-  const [isVerifying, setIsVerifying] = useState(true);
-  const [tokenValid, setTokenValid] = useState(false);
-  const [tokenError, setTokenError] = useState('');
+export default function ResetPasswordForm({ token, onSuccess }: ResetPasswordFormProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    async function verify() {
-      try {
-        const res = await api.verifyResetToken(token);
-        if (res.valido) {
-          setTokenValid(true);
-        } else {
-          setTokenError('El token no es válido');
-        }
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Token inválido o expirado';
-        setTokenError(msg);
-      }
-      setIsVerifying(false);
-    }
-    verify();
-  }, [token]);
-
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword) {
+      setError('La nueva contraseña es obligatoria');
+      return;
+    }
+    if (newPassword.length < 6) {
       setError('La contraseña debe tener al menos 6 caracteres');
       return;
     }
@@ -48,122 +28,55 @@ export default function ResetPasswordForm({ token }: ResetPasswordFormProps) {
       return;
     }
     setIsLoading(true);
+    setError('');
     try {
-      await api.resetPassword({ token, new_password: newPassword, confirm_password: confirmPassword });
-      setSuccess(true);
-      setTimeout(() => navigate('/login'), 2000);
+      await resetPassword({ token, new_password: newPassword, confirm_password: confirmPassword });
+      onSuccess();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al restablecer la contraseña';
       setError(msg);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
-
-  if (isVerifying) {
-    return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 text-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-          <p className="text-sm text-slate-500">Verificando token...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (tokenError) {
-    return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 text-center">
-        <div className="flex justify-center mb-4">
-          <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
-            <AlertCircle className="h-6 w-6 text-red-600" />
-          </div>
-        </div>
-        <h2 className="text-xl font-semibold text-slate-900 mb-2">Token inválido</h2>
-        <p className="text-sm text-slate-600 mb-6">{tokenError}</p>
-        <a
-          href="/forgot-password"
-          className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 transition-all shadow-sm text-sm"
-        >
-          Solicitar nuevo enlace
-        </a>
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 text-center">
-        <div className="flex justify-center mb-4">
-          <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-            <Check className="h-6 w-6 text-green-600" />
-          </div>
-        </div>
-        <h2 className="text-xl font-semibold text-slate-900 mb-2">Contraseña actualizada</h2>
-        <p className="text-sm text-slate-600">Redirigiendo al inicio de sesión...</p>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="text-center mb-2">
-        <div className="flex justify-center mb-3">
-          <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center">
-            <Lock className="h-6 w-6 text-slate-700" />
-          </div>
-        </div>
-        <h2 className="text-xl font-semibold text-slate-900 mb-1">Restablecer contraseña</h2>
-        <p className="text-sm text-slate-500">Ingresa tu nueva contraseña</p>
-      </div>
-
       {error && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>{error}</span>
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+          {error}
         </div>
       )}
 
       <div>
-        <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700 mb-1.5">
-          Nueva contraseña
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Nueva contraseña</label>
         <input
-          id="newPassword"
           type="password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
-          placeholder="••••••••"
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
-          disabled={isLoading}
+          placeholder="Mínimo 6 caracteres"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all text-sm"
         />
       </div>
 
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700 mb-1.5">
-          Confirmar contraseña
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirmar contraseña</label>
         <input
-          id="confirmPassword"
           type="password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
-          placeholder="••••••••"
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent transition-all"
-          disabled={isLoading}
+          placeholder="Repite la contraseña"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all text-sm"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+        className="w-full py-2.5 px-4 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
       >
-        {isLoading ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
-        ) : (
-          <Check className="h-5 w-5" />
-        )}
-        {isLoading ? 'Guardando...' : 'Restablecer contraseña'}
+        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isLoading ? 'Restableciendo...' : 'Restablecer contraseña'}
       </button>
     </form>
   );

@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { LogIn, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import * as api from '../../services/api';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
 
-export default function LoginForm() {
-  const navigate = useNavigate();
+interface LoginFormProps {
+  onSuccess: () => void;
+}
+
+export default function LoginForm({ onSuccess }: LoginFormProps) {
   const { login } = useAuth();
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -17,18 +18,21 @@ export default function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    if (!email.trim() || !password.trim()) {
+      setError('Todos los campos son obligatorios');
+      return;
+    }
     setIsLoading(true);
-
+    setError('');
     try {
-      const response = await api.login({ email, password, remember });
-      login(response.token, response.usuario, remember);
-      navigate('/');
+      await login({ email: email.trim(), password, remember });
+      onSuccess();
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError('Credenciales inválidas. Verifica tu correo y contraseña.');
+      const message = err instanceof Error ? err.message : 'Credenciales inválidas';
+      if (message.includes('401') || message.includes('INVALID_CREDENTIALS')) {
+        setError('Credenciales inválidas');
       } else {
-        setError('Error al iniciar sesión. Intenta de nuevo.');
+        setError(message);
       }
     } finally {
       setIsLoading(false);
@@ -38,7 +42,7 @@ export default function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
           {error}
         </div>
       )}
@@ -52,9 +56,10 @@ export default function LoginForm() {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="correo@ejemplo.com"
-          required
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          placeholder="tu@correo.com"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all text-sm"
+          disabled={isLoading}
+          autoComplete="email"
         />
       </div>
 
@@ -68,9 +73,10 @@ export default function LoginForm() {
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Ingresa tu contraseña"
-            required
-            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            placeholder="••••••••"
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all text-sm pr-10"
+            disabled={isLoading}
+            autoComplete="current-password"
           />
           <button
             type="button"
@@ -83,37 +89,34 @@ export default function LoginForm() {
       </div>
 
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
           <input
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
-            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
           />
-          <span className="text-sm text-slate-600">Recordar sesión</span>
+          Recordar sesión
         </label>
-        <button
-          type="button"
-          onClick={() => navigate('/forgot-password')}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+        <Link
+          to="/forgot-password"
+          className="text-sm text-slate-600 hover:text-slate-900 underline"
         >
           ¿Olvidaste tu contraseña?
-        </button>
+        </Link>
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium"
       >
         {isLoading ? (
-          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <>
-            <LogIn className="h-4 w-4" />
-            Iniciar sesión
-          </>
+          <LogIn className="h-4 w-4" />
         )}
+        {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
       </button>
     </form>
   );

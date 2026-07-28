@@ -1,114 +1,90 @@
 import { useState, useEffect } from 'react';
-import * as api from '../../services/api';
-import type { UserOut, PreferenciasOut, PerfilUpdateRequest, PreferenciasUpdateRequest } from '../types/auth';
+import { Loader2, AlertTriangle, UserCircle } from 'lucide-react';
 import ProfileForm from '../components/profile/ProfileForm';
 import ChangePasswordForm from '../components/profile/ChangePasswordForm';
 import PreferencesForm from '../components/profile/PreferencesForm';
+import { perfilApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
-import { UserCircle, Lock, Settings } from 'lucide-react';
-
-type Tab = 'profile' | 'password' | 'preferences';
+import type { PreferenciasOut } from '../types/auth';
 
 export default function ProfilePage() {
-  const { updateUser } = useAuth();
-  const [user, setUser] = useState<UserOut | null>(null);
+  const { user, updateUser } = useAuth();
   const [preferencias, setPreferencias] = useState<PreferenciasOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const loadProfile = async () => {
+    const fetchProfile = async () => {
       try {
-        const data = await api.getPerfil();
-        setUser(data.usuario);
-        setPreferencias(data.preferencias);
-      } catch {
-        // Error handled silently
+        const response = await perfilApi.get();
+        setPreferencias(response.preferencias);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Error al cargar perfil';
+        setError(message);
       } finally {
         setIsLoading(false);
       }
     };
-    loadProfile();
+    fetchProfile();
   }, []);
 
-  const handleProfileSave = async (data: PerfilUpdateRequest) => {
-    const updated = await api.updatePerfil(data);
-    setUser(updated);
-    updateUser(updated);
+  const handleProfileSave = async (data: { nombre_completo?: string; email?: string }) => {
+    const updatedUser = await perfilApi.update(data);
+    updateUser(updatedUser);
   };
 
-  const handlePreferencesSave = async (data: PreferenciasUpdateRequest) => {
-    const updated = await api.updatePreferencias(data);
+  const handlePreferencesSave = async (data: Partial<PreferenciasOut>) => {
+    const updated = await perfilApi.updatePreferencias(data);
     setPreferencias(updated);
   };
 
-  const tabs: { id: Tab; label: string; icon: typeof UserCircle }[] = [
-    { id: 'profile', label: 'Perfil', icon: UserCircle },
-    { id: 'password', label: 'Contraseña', icon: Lock },
-    { id: 'preferences', label: 'Preferencias', icon: Settings },
-  ];
-
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+        {error}
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Mi Perfil</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Gestiona tu información personal y preferencias
-        </p>
+    <div className="max-w-2xl mx-auto space-y-8">
+      <div className="flex items-center gap-4">
+        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
+          <UserCircle className="h-8 w-8 text-slate-500" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Mi Perfil</h1>
+          <p className="text-sm text-slate-500">
+            {user?.nombre_completo} · {user?.email}
+          </p>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-1">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Content */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-        {activeTab === 'profile' && user && (
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Datos personales</h2>
-            <ProfileForm user={user} onSave={handleProfileSave} />
-          </div>
-        )}
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Datos personales</h2>
+        {user && <ProfileForm user={user} onSave={handleProfileSave} />}
+      </div>
 
-        {activeTab === 'password' && (
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Cambiar contraseña</h2>
-            <ChangePasswordForm />
-          </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+        {preferencias && (
+          <PreferencesForm
+            preferencias={preferencias}
+            onSave={handlePreferencesSave}
+          />
         )}
+      </div>
 
-        {activeTab === 'preferences' && preferencias && (
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Preferencias</h2>
-            <PreferencesForm preferencias={preferencias} onSave={handlePreferencesSave} />
-          </div>
-        )}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+        <ChangePasswordForm />
       </div>
     </div>
   );

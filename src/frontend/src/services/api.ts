@@ -1,3 +1,6 @@
+// ============================================================
+// API Client — Autenticación, Usuarios y Configuración Inicial
+// ============================================================
 import type {
   SetupStatusResponse,
   SetupRequest,
@@ -20,199 +23,156 @@ import type {
   PerfilUpdateRequest,
   PreferenciasOut,
   PreferenciasUpdateRequest,
-  LogoutResponse,
 } from '../types/auth';
 
 const API_URL = '/api/autenticacin_usuarios_y_configuracin_inicial';
 
-class ApiError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
+  return headers;
 }
 
 async function request<T>(
+  method: string,
   path: string,
-  options: RequestInit = {},
-  authToken?: string | null
+  body?: unknown,
+  params?: Record<string, string | number | boolean | undefined | null>,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...((options.headers as Record<string, string>) || {}),
+  let url = `${API_URL}${path}`;
+  if (params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        searchParams.set(key, String(value));
+      }
+    });
+    const qs = searchParams.toString();
+    if (qs) url += `?${qs}`;
+  }
+
+  const options: RequestInit = {
+    method,
+    headers: getAuthHeaders(),
   };
-
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
+  if (body !== undefined) {
+    options.body = JSON.stringify(body);
   }
 
-  // Remove Content-Type if no body
-  if (!options.body) {
-    delete headers['Content-Type'];
-  }
+  const response = await fetch(url, options);
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
-
-  if (!res.ok) {
-    let message = 'Error en la solicitud';
+  if (!response.ok) {
+    let errorData: { detail?: string; message?: string } | null = null;
     try {
-      const err = await res.json();
-      message = err.detail || err.message || message;
+      errorData = await response.json();
     } catch {
-      message = res.statusText || message;
+      // ignore parse error
     }
-    throw new ApiError(message, res.status);
+    const errorMessage = errorData?.detail || errorData?.message || `Error ${response.status}`;
+    const error = new Error(errorMessage) as Error & { status: number };
+    error.status = response.status;
+    throw error;
   }
 
-  // Handle 204 No Content
-  if (res.status === 204) {
-    return undefined as unknown as T;
+  // Si el status es 204 No Content, retornar undefined
+  if (response.status === 204) {
+    return undefined as T;
   }
 
-  return res.json();
+  return response.json() as Promise<T>;
 }
 
-function getToken(): string | null {
-  const stored = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-  return stored;
-}
+// ============================================================
+// Endpoints Públicos (Sin autenticación)
+// ============================================================
 
-// ==============================
-// Auth (Public)
-// ==============================
+export const authApi = {
+  /** GET /api/auth/check-setup */
+  checkSetup: () =>
+    request<SetupStatusResponse>('GET', '/auth/check-setup'),
 
-export function checkSetup(): Promise<SetupStatusResponse> {
-  return request<SetupStatusResponse>('/auth/check-setup');
-}
+  /** POST /api/auth/setup */
+  setup: (data: SetupRequest) =>
+    request<SetupResponse>('POST', '/auth/setup', data),
 
-export function runSetup(data: SetupRequest): Promise<SetupResponse> {
-  return request<SetupResponse>('/auth/setup', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+  /** POST /api/auth/login */
+  login: (data: LoginRequest) =>
+    request<LoginResponse>('POST', '/auth/login', data),
 
-export function login(data: LoginRequest): Promise<LoginResponse> {
-  return request<LoginResponse>('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+  /** POST /api/auth/forgot-password */
+  forgotPassword: (data: ForgotPasswordRequest) =>
+    request<ForgotPasswordResponse>('POST', '/auth/forgot-password', data),
 
-export function forgotPassword(data: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
-  return request<ForgotPasswordResponse>('/auth/forgot-password', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+  /** GET /api/auth/verify-reset-token/{token} */
+  verifyResetToken: (token: string) =>
+    request<VerifyTokenResponse>('GET', `/auth/verify-reset-token/${token}`),
 
-export function verifyResetToken(token: string): Promise<VerifyTokenResponse> {
-  return request<VerifyTokenResponse>(`/auth/verify-reset-token/${token}`);
-}
+  /** POST /api/auth/reset-password */
+  resetPassword: (data: ResetPasswordRequest) =>
+    request<ResetPasswordResponse>('POST', '/auth/reset-password', data),
+};
 
-export function resetPassword(data: ResetPasswordRequest): Promise<ResetPasswordResponse> {
-  return request<ResetPasswordResponse>('/auth/reset-password', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
+// ============================================================
+// Endpoints Protegidos (Requiere token Bearer)
+// ============================================================
 
-// ==============================
-// Auth (Protected)
-// ==============================
+export const authProtectedApi = {
+  /** GET /api/auth/me */
+  me: () =>
+    request<UserOut>('GET', '/auth/me'),
 
-export function getMe(): Promise<UserOut> {
-  return request<UserOut>('/auth/me', {}, getToken());
-}
+  /** POST /api/auth/logout */
+  logout: () =>
+    request<{ mensaje: string }>('POST', '/auth/logout'),
+};
 
-export function logout(): Promise<LogoutResponse> {
-  return request<LogoutResponse>(
-    '/auth/logout',
-    { method: 'POST' },
-    getToken()
-  );
-}
+export const usuariosApi = {
+  /** GET /api/usuarios?search=&page=&page_size= */
+  list: (params: { search?: string; page?: number; page_size?: number }) =>
+    request<PaginatedUsersResponse>('GET', '/usuarios', undefined, params as Record<string, string | number | boolean | undefined | null>),
 
-// ==============================
-// Users (Admin)
-// ==============================
+  /** GET /api/usuarios/{id} */
+  get: (id: number) =>
+    request<UserOut>('GET', `/usuarios/${id}`),
 
-export function listUsuarios(params?: {
-  search?: string;
-  page?: number;
-  page_size?: number;
-}): Promise<PaginatedUsersResponse> {
-  const searchParams = new URLSearchParams();
-  if (params?.search) searchParams.set('search', params.search);
-  if (params?.page !== undefined) searchParams.set('page', String(params.page));
-  if (params?.page_size !== undefined) searchParams.set('page_size', String(params.page_size));
-  const qs = searchParams.toString();
-  return request<PaginatedUsersResponse>(`/usuarios${qs ? `?${qs}` : ''}`, {}, getToken());
-}
+  /** POST /api/usuarios */
+  create: (data: UserCreateRequest) =>
+    request<UserOut>('POST', '/usuarios', data),
 
-export function getUsuario(id: number): Promise<UserOut> {
-  return request<UserOut>(`/usuarios/${id}`, {}, getToken());
-}
+  /** PUT /api/usuarios/{id} */
+  update: (id: number, data: UserUpdateRequest) =>
+    request<UserOut>('PUT', `/usuarios/${id}`, data),
 
-export function createUsuario(data: UserCreateRequest): Promise<UserOut> {
-  return request<UserOut>('/usuarios', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }, getToken());
-}
+  /** PATCH /api/usuarios/{id}/deactivate */
+  deactivate: (id: number) =>
+    request<UserActionResponse>('PATCH', `/usuarios/${id}/deactivate`),
 
-export function updateUsuario(id: number, data: UserUpdateRequest): Promise<UserOut> {
-  return request<UserOut>(`/usuarios/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }, getToken());
-}
+  /** PATCH /api/usuarios/{id}/reactivate */
+  reactivate: (id: number) =>
+    request<UserActionResponse>('PATCH', `/usuarios/${id}/reactivate`),
+};
 
-export function deactivateUsuario(id: number): Promise<UserActionResponse> {
-  return request<UserActionResponse>(`/usuarios/${id}/deactivate`, {
-    method: 'PATCH',
-  }, getToken());
-}
+export const perfilApi = {
+  /** GET /api/perfil */
+  get: () =>
+    request<PerfilResponse>('GET', '/perfil'),
 
-export function reactivateUsuario(id: number): Promise<UserActionResponse> {
-  return request<UserActionResponse>(`/usuarios/${id}/reactivate`, {
-    method: 'PATCH',
-  }, getToken());
-}
+  /** PUT /api/perfil */
+  update: (data: PerfilUpdateRequest) =>
+    request<UserOut>('PUT', '/perfil', data),
 
-// ==============================
-// Perfil
-// ==============================
+  /** PUT /api/perfil/cambiar-password */
+  changePassword: (data: ChangePasswordRequest) =>
+    request<ChangePasswordResponse>('PUT', '/perfil/cambiar-password', data),
 
-export function getPerfil(): Promise<PerfilResponse> {
-  return request<PerfilResponse>('/perfil', {}, getToken());
-}
+  /** GET /api/perfil/preferencias */
+  getPreferencias: () =>
+    request<PreferenciasOut>('GET', '/perfil/preferencias'),
 
-export function updatePerfil(data: PerfilUpdateRequest): Promise<UserOut> {
-  return request<UserOut>('/perfil', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }, getToken());
-}
-
-export function changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
-  return request<ChangePasswordResponse>('/perfil/cambiar-password', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }, getToken());
-}
-
-export function getPreferencias(): Promise<PreferenciasOut> {
-  return request<PreferenciasOut>('/perfil/preferencias', {}, getToken());
-}
-
-export function updatePreferencias(data: PreferenciasUpdateRequest): Promise<PreferenciasOut> {
-  return request<PreferenciasOut>('/perfil/preferencias', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }, getToken());
-}
+  /** PUT /api/perfil/preferencias */
+  updatePreferencias: (data: PreferenciasUpdateRequest) =>
+    request<PreferenciasOut>('PUT', '/perfil/preferencias', data),
+};

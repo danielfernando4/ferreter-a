@@ -1,9 +1,13 @@
-// --- User Types ---
+// ============================================================
+// Types de Autenticación, Usuarios y Configuración Inicial
+// ============================================================
+
+// --- Usuario ---
 export interface UserOut {
   id: number;
   nombre_completo: string;
   email: string;
-  rol: string;
+  rol: string; // "administrador" | "vendedor" | "almacen"
   activo: boolean;
   fecha_registro: string;
   ultimo_acceso: string | null;
@@ -22,7 +26,7 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
-// --- Auth Types ---
+// --- Autenticación ---
 export interface LoginRequest {
   email: string;
   password: string;
@@ -36,7 +40,7 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
-// --- Setup Types ---
+// --- Setup ---
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -44,7 +48,7 @@ export interface SetupRequest {
   negocio_nombre: string;
   negocio_direccion: string;
   negocio_rfc: string;
-  negocio_telefono?: string;
+  negocio_telefono?: string | null;
 }
 
 export interface SetupResponse {
@@ -57,7 +61,7 @@ export interface SetupStatusResponse {
   admin_exists: boolean;
 }
 
-// --- Preferences Types ---
+// --- Preferencias ---
 export interface PreferenciasOut {
   idioma: string;
   tema_visual: string;
@@ -70,18 +74,13 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
-// --- Password Recovery Types ---
+// --- Recuperación de Contraseña ---
 export interface ForgotPasswordRequest {
   email: string;
 }
 
 export interface ForgotPasswordResponse {
   mensaje: string;
-}
-
-export interface VerifyTokenResponse {
-  valido: boolean;
-  email: string;
 }
 
 export interface ResetPasswordRequest {
@@ -104,7 +103,12 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
-// --- Generic Types ---
+export interface VerifyTokenResponse {
+  valido: boolean;
+  email: string;
+}
+
+// --- Respuestas Genéricas ---
 export interface PaginatedUsersResponse {
   items: UserOut[];
   total: number;
@@ -128,15 +132,10 @@ export interface PerfilUpdateRequest {
   email?: string;
 }
 
-export interface LogoutResponse {
-  mensaje: string;
-}
-
-// --- Auth Context State ---
+// --- Estado de Autenticación ---
 export interface AuthState {
   user: UserOut | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setupRequired: boolean;
 }

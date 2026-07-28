@@ -1,12 +1,14 @@
 import { createContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import type { AuthState, UserOut } from '../types/auth';
-import * as api from '../services/api';
+import type { UserOut, AuthState, LoginRequest } from '../types/auth';
+import { authApi, authProtectedApi } from '../services/api';
 
 export interface AuthContextType extends AuthState {
-  login: (token: string, usuario: UserOut, remember: boolean) => void;
+  login: (data: LoginRequest) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (user: UserOut) => void;
-  refreshUser: () => Promise<void>;
+  checkSetupStatus: () => Promise<{ setup_completed: boolean; admin_exists: boolean }>;
+  setupRequired: boolean;
+  setSetupRequired: (value: boolean) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,108 +19,109 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     token: null,
     isAuthenticated: false,
     isLoading: true,
-    setupRequired: false,
   });
-
-  const refreshUser = useCallback(async () => {
-    try {
-      const user = await api.getMe();
-      setState((prev) => ({
-        ...prev,
-        user,
-        isAuthenticated: true,
-        isLoading: false,
-        setupRequired: false,
-      }));
-    } catch {
-      // Token invalid
-      localStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_token');
-      setState({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        setupRequired: false,
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        // First check if setup is required
-        const setupStatus = await api.checkSetup();
-        if (!setupStatus.setup_completed && !setupStatus.admin_exists) {
-          setState({
-            user: null,
-            token: null,
-            isAuthenticated: false,
-            isLoading: false,
-            setupRequired: true,
-          });
-          return;
-        }
-
-        // Check for existing token
-        const token =
-          localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-        if (token) {
-          setState((prev) => ({ ...prev, token, isLoading: true }));
-          await refreshUser();
-        } else {
-          setState((prev) => ({ ...prev, isLoading: false, setupRequired: false }));
-        }
-      } catch {
-        setState((prev) => ({ ...prev, isLoading: false }));
-      }
-    };
-    initAuth();
-  }, [refreshUser]);
-
-  const login = useCallback((token: string, usuario: UserOut, remember: boolean) => {
-    if (remember) {
-      localStorage.setItem('auth_token', token);
-    } else {
-      sessionStorage.setItem('auth_token', token);
-    }
-    setState({
-      user: usuario,
-      token,
-      isAuthenticated: true,
-      isLoading: false,
-      setupRequired: false,
-    });
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await api.logout();
-    } catch {
-      // Even if logout fails, clear local state
-    }
-    localStorage.removeItem('auth_token');
-    sessionStorage.removeItem('auth_token');
-    setState({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
-      setupRequired: false,
-    });
-  }, []);
+  const [setupRequired, setSetupRequired] = useState(false);
 
   const updateUser = useCallback((user: UserOut) => {
     setState((prev) => ({ ...prev, user }));
   }, []);
 
-  const value: AuthContextType = {
-    ...state,
-    login,
-    logout,
-    updateUser,
-    refreshUser,
-  };
+  const login = useCallback(async (data: LoginRequest) => {
+    const response = await authApi.login(data);
+    const storage = data.remember ? localStorage : sessionStorage;
+    storage.setItem('auth_token', response.token);
+    localStorage.setItem('user_data', JSON.stringify(response.usuario));
+    setState({
+      user: response.usuario,
+      token: response.token,
+      isAuthenticated: true,
+      isLoading: false,
+    });
+  }, []);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const logout = useCallback(async () => {
+    try {
+      await authProtectedApi.logout();
+    } catch {
+      // Ignore errors on logout
+    }
+    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+    localStorage.removeItem('user_data');
+    setState({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  }, []);
+
+  const checkSetupStatus = useCallback(async () => {
+    const status = await authApi.checkSetup();
+    return status;
+  }, []);
+
+  // Initialize auth state from storage
+  useEffect(() => {
+    const initAuth = async () => {
+      const token =
+        localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+      const userData = localStorage.getItem('user_data');
+
+      if (token && userData) {
+        try {
+          const user = JSON.parse(userData) as UserOut;
+          setState({
+            user,
+            token,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+          // Verify token is still valid
+          try {
+            const freshUser = await authProtectedApi.me();
+            localStorage.setItem('user_data', JSON.stringify(freshUser));
+            setState({
+              user: freshUser,
+              token,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+          } catch {
+            // Token expired or invalid
+            localStorage.removeItem('auth_token');
+            sessionStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            setState({
+              user: null,
+              token: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+          }
+        } catch {
+          setState((prev) => ({ ...prev, isLoading: false }));
+        }
+      } else {
+        setState((prev) => ({ ...prev, isLoading: false }));
+      }
+    };
+    initAuth();
+  }, []);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        ...state,
+        login,
+        logout,
+        updateUser,
+        checkSetupStatus,
+        setupRequired,
+        setSetupRequired,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }

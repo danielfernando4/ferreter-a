@@ -1,16 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import * as api from '../../services/api';
-import type { UserOut } from '../../types/auth';
+import { Plus, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import UserTable from '../components/users/UserTable';
 import SearchInput from '../components/users/SearchInput';
 import Pagination from '../components/users/Pagination';
 import DeactivateConfirmModal from '../components/users/DeactivateConfirmModal';
-import { Plus, Users, AlertCircle } from 'lucide-react';
+import { usuariosApi } from '../services/api';
+import type { UserOut } from '../types/auth';
 
 export default function UserListPage() {
   const navigate = useNavigate();
-
   const [usuarios, setUsuarios] = useState<UserOut[]>([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -18,40 +17,57 @@ export default function UserListPage() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deactivateTarget, setDeactivateTarget] = useState<UserOut | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    user: UserOut;
+    action: 'deactivate' | 'reactivate';
+  } | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
 
-  const fetchUsuarios = useCallback(async () => {
+  const fetchUsers = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
-      const res = await api.listUsuarios({ search: search || undefined, page, page_size: 10 });
-      setUsuarios(res.items);
-      setTotal(res.total);
-      setTotalPages(res.total_pages);
-    } catch {
-      setError('Error al cargar los usuarios');
+      const response = await usuariosApi.list({
+        search: search || undefined,
+        page,
+        page_size: 10,
+      });
+      setUsuarios(response.items);
+      setTotalPages(response.total_pages);
+      setTotal(response.total);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al cargar usuarios';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   }, [search, page]);
 
   useEffect(() => {
-    fetchUsuarios();
-  }, [fetchUsuarios]);
+    fetchUsers();
+  }, [fetchUsers]);
 
-  const handleSearch = (value: string) => {
+  const handleSearchChange = (value: string) => {
     setSearch(value);
     setPage(1);
   };
 
-  const handleDeactivate = async () => {
-    if (!deactivateTarget) return;
+  const handleConfirmAction = async () => {
+    if (!confirmModal) return;
+    setModalLoading(true);
     try {
-      await api.deactivateUsuario(deactivateTarget.id);
-      setDeactivateTarget(null);
-      fetchUsuarios();
-    } catch {
-      setError('Error al desactivar el usuario');
+      if (confirmModal.action === 'deactivate') {
+        await usuariosApi.deactivate(confirmModal.user.id);
+      } else {
+        await usuariosApi.reactivate(confirmModal.user.id);
+      }
+      setConfirmModal(null);
+      fetchUsers();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al procesar la acción';
+      setError(message);
+    } finally {
+      setModalLoading(false);
     }
   };
 
@@ -67,7 +83,7 @@ export default function UserListPage() {
         </div>
         <button
           onClick={() => navigate('/usuarios/nuevo')}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all"
+          className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all text-sm font-medium self-start"
         >
           <Plus className="h-4 w-4" />
           Nuevo usuario
@@ -75,73 +91,71 @@ export default function UserListPage() {
       </div>
 
       {/* Search */}
-      <div className="max-w-sm">
-        <SearchInput
-          value={search}
-          onChange={handleSearch}
-          placeholder="Buscar usuarios..."
-        />
-      </div>
+      <SearchInput
+        value={search}
+        onChange={handleSearchChange}
+        placeholder="Buscar por nombre o email..."
+      />
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
-          <AlertCircle className="h-4 w-4" />
-          {error}
+        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button
+            onClick={fetchUsers}
+            className="p-1 hover:bg-red-100 rounded-lg transition-all"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
         </div>
       )}
 
       {/* Loading */}
-      {isLoading ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 flex justify-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
         </div>
-      ) : usuarios.length === 0 ? (
-        /* Empty */
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
-          <div className="w-16 h-16 mx-auto rounded-full bg-slate-100 flex items-center justify-center mb-4">
-            <Users className="h-8 w-8 text-slate-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-slate-900 mb-1">No hay usuarios</h3>
-          <p className="text-sm text-slate-500 mb-4">
-            {search ? 'No se encontraron usuarios con ese criterio de búsqueda.' : 'Comienza creando el primer usuario del sistema.'}
-          </p>
-          {!search && (
-            <button
-              onClick={() => navigate('/usuarios/nuevo')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all"
-            >
-              <Plus className="h-4 w-4" />
-              Crear usuario
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          {/* Table */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <UserTable
-              usuarios={usuarios}
-              onEdit={(user) => navigate(`/usuarios/${user.id}/editar`)}
-              onDeactivate={setDeactivateTarget}
-            />
-          </div>
-
-          {/* Pagination */}
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
-        </>
       )}
 
-      {/* Deactivate Modal */}
-      {deactivateTarget && (
+      {/* Empty state */}
+      {!isLoading && !error && usuarios.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200">
+          <p className="text-slate-500 text-sm">
+            {search
+              ? 'No se encontraron usuarios con ese criterio de búsqueda'
+              : 'No hay usuarios registrados'}
+          </p>
+        </div>
+      )}
+
+      {/* Table */}
+      {!isLoading && !error && usuarios.length > 0 && (
+        <UserTable
+          usuarios={usuarios}
+          onEdit={(user) => navigate(`/usuarios/${user.id}/editar`)}
+          onDeactivate={(user) => setConfirmModal({ user, action: 'deactivate' })}
+          onReactivate={(user) => setConfirmModal({ user, action: 'reactivate' })}
+        />
+      )}
+
+      {/* Pagination */}
+      {!isLoading && totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+        />
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmModal && (
         <DeactivateConfirmModal
-          userName={deactivateTarget.nombre_completo}
-          onConfirm={handleDeactivate}
-          onCancel={() => setDeactivateTarget(null)}
+          userName={confirmModal.user.nombre_completo}
+          action={confirmModal.action}
+          onConfirm={handleConfirmAction}
+          onCancel={() => setConfirmModal(null)}
+          isLoading={modalLoading}
         />
       )}
     </div>

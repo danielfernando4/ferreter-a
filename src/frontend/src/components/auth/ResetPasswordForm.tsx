@@ -1,116 +1,70 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { verifyResetToken, resetPassword } from '../../services/api';
+import { useState } from 'react';
+import { resetPassword } from '../../services/api';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 interface ResetPasswordFormProps {
   token: string;
+  onSuccess: () => void;
 }
 
-export default function ResetPasswordForm({ token }: ResetPasswordFormProps) {
-  const navigate = useNavigate();
-  const [verifying, setVerifying] = useState(true);
-  const [tokenValid, setTokenValid] = useState(false);
-  const [email, setEmail] = useState('');
+export default function ResetPasswordForm({ token, onSuccess }: ResetPasswordFormProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    const verify = async () => {
-      try {
-        const result = await verifyResetToken(token);
-        if (result.valido) {
-          setTokenValid(true);
-          setEmail(result.email);
-        } else {
-          setError('El enlace de recuperación no es válido o ha expirado.');
-        }
-      } catch {
-        setError('El enlace de recuperación no es válido o ha expirado.');
-      } finally {
-        setVerifying(false);
-      }
-    };
-    verify();
-  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword.trim() || !confirmPassword.trim()) {
-      setError('Todos los campos son obligatorios');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
-      return;
-    }
+    setError('');
+
     if (newPassword !== confirmPassword) {
       setError('Las contraseñas no coinciden');
       return;
     }
+
+    if (newPassword.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
     setIsLoading(true);
-    setError('');
+
     try {
-      await resetPassword({ token, new_password: newPassword, confirm_password: confirmPassword });
-      navigate('/login', { state: { passwordReset: true } });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al restablecer la contraseña';
-      setError(message);
+      await resetPassword({
+        token,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Error al restablecer la contraseña');
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (verifying) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
-        <p className="text-slate-500">Verificando enlace de recuperación...</p>
-      </div>
-    );
-  }
-
-  if (!tokenValid) {
-    return (
-      <div className="text-center py-12">
-        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm mb-4">
-          {error}
-        </div>
-        <button
-          onClick={() => navigate('/forgot-password')}
-          className="text-blue-600 hover:text-blue-700 hover:underline text-sm"
-        >
-          Solicitar un nuevo enlace
-        </button>
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
           {error}
         </div>
       )}
-      <div className="text-center">
-        <h2 className="text-xl font-semibold text-slate-900 mb-2">Restablecer contraseña</h2>
-        <p className="text-sm text-slate-500">
-          Ingresa tu nueva contraseña para la cuenta <strong>{email}</strong>
-        </p>
-      </div>
+
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Nueva contraseña</label>
+        <label htmlFor="new-password" className="block text-sm font-medium text-slate-700 mb-1.5">
+          Nueva contraseña
+        </label>
         <div className="relative">
           <input
+            id="new-password"
             type={showPassword ? 'text' : 'password'}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900 pr-10"
             placeholder="Mínimo 6 caracteres"
+            required
+            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
           />
           <button
             type="button"
@@ -121,23 +75,35 @@ export default function ResetPasswordForm({ token }: ResetPasswordFormProps) {
           </button>
         </div>
       </div>
+
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Confirmar nueva contraseña</label>
+        <label htmlFor="confirm-password" className="block text-sm font-medium text-slate-700 mb-1.5">
+          Confirmar contraseña
+        </label>
         <input
+          id="confirm-password"
           type="password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900"
           placeholder="Repite la contraseña"
+          required
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
         />
       </div>
+
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2"
+        className="w-full py-2.5 px-4 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
       >
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-        {isLoading ? 'Guardando...' : 'Restablecer contraseña'}
+        {isLoading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Restableciendo contraseña...
+          </>
+        ) : (
+          'Restablecer contraseña'
+        )}
       </button>
     </form>
   );

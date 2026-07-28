@@ -1,9 +1,8 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import type { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
-  children: ReactNode;
+  children: React.ReactNode;
   requiredRole?: string;
 }
 
@@ -12,8 +11,11 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-500">Verificando sesión...</p>
+        </div>
       </div>
     );
   }
@@ -22,11 +24,15 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user && user.rol !== requiredRole) {
-    if (user.rol === 'administrador') {
-      return <>{children}</>;
-    }
-    return <Navigate to="/" replace />;
+  if (requiredRole && user?.rol !== requiredRole) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">Acceso denegado</h2>
+          <p className="text-slate-500">No tienes permisos para acceder a esta página.</p>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

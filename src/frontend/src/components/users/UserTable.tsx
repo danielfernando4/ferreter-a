@@ -1,89 +1,82 @@
-import { Edit, UserX, UserCheck } from 'lucide-react';
 import type { UserOut } from '../../types/auth';
+import { Edit, Trash2, UserCheck, UserX } from 'lucide-react';
 
 interface UserTableProps {
   usuarios: UserOut[];
   onEdit: (user: UserOut) => void;
   onDeactivate: (user: UserOut) => void;
-  onReactivate: (user: UserOut) => void;
 }
 
-const rolBadge = (rol: string) => {
-  const styles: Record<string, string> = {
-    administrador: 'bg-purple-100 text-purple-700',
-    vendedor: 'bg-blue-100 text-blue-700',
-    almacen: 'bg-green-100 text-green-700',
-  };
-  return styles[rol] || 'bg-slate-100 text-slate-700';
-};
-
-const statusBadge = (activo: boolean) =>
-  activo
-    ? 'bg-green-100 text-green-700'
-    : 'bg-red-100 text-red-700';
-
-export default function UserTable({ usuarios, onEdit, onDeactivate, onReactivate }: UserTableProps) {
+export default function UserTable({ usuarios, onEdit, onDeactivate }: UserTableProps) {
   if (usuarios.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500">
-        No hay usuarios registrados.
+      <div className="text-center py-12">
+        <UserCheck className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+        <p className="text-slate-500 text-sm">No hay usuarios registrados</p>
       </div>
     );
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full">
         <thead>
           <tr className="border-b border-slate-200">
-            <th className="text-left py-3 px-4 font-medium text-slate-500">Nombre</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-500">Email</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-500">Rol</th>
-            <th className="text-left py-3 px-4 font-medium text-slate-500">Estado</th>
-            <th className="text-right py-3 px-4 font-medium text-slate-500">Acciones</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nombre</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Rol</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</th>
+            <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Acciones</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-100">
           {usuarios.map((user) => (
-            <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-              <td className="py-3 px-4 font-medium text-slate-900">{user.nombre_completo}</td>
-              <td className="py-3 px-4 text-slate-600">{user.email}</td>
+            <tr key={user.id} className="hover:bg-slate-50 transition-colors">
               <td className="py-3 px-4">
-                <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-medium ${rolBadge(user.rol)}`}>
+                <p className="text-sm font-medium text-slate-900">{user.nombre_completo}</p>
+              </td>
+              <td className="py-3 px-4">
+                <p className="text-sm text-slate-600">{user.email}</p>
+              </td>
+              <td className="py-3 px-4">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  user.rol === 'administrador'
+                    ? 'bg-purple-100 text-purple-700'
+                    : user.rol === 'vendedor'
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-blue-100 text-blue-700'
+                }`}>
                   {user.rol}
                 </span>
               </td>
               <td className="py-3 px-4">
-                <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-medium ${statusBadge(user.activo)}`}>
+                <span className={`inline-flex items-center gap-1 text-xs font-medium ${
+                  user.activo ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {user.activo ? (
+                    <UserCheck className="w-3.5 h-3.5" />
+                  ) : (
+                    <UserX className="w-3.5 h-3.5" />
+                  )}
                   {user.activo ? 'Activo' : 'Inactivo'}
                 </span>
               </td>
               <td className="py-3 px-4 text-right">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-1">
                   <button
                     onClick={() => onEdit(user)}
-                    className="p-2 rounded-lg hover:bg-blue-50 text-blue-600"
-                    title="Editar"
+                    className="p-2 rounded-lg hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-colors"
+                    title="Editar usuario"
                   >
                     <Edit className="w-4 h-4" />
                   </button>
-                  {user.activo ? (
-                    <button
-                      onClick={() => onDeactivate(user)}
-                      className="p-2 rounded-lg hover:bg-red-50 text-red-500"
-                      title="Desactivar"
-                    >
-                      <UserX className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => onReactivate(user)}
-                      className="p-2 rounded-lg hover:bg-green-50 text-green-600"
-                      title="Reactivar"
-                    >
-                      <UserCheck className="w-4 h-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => onDeactivate(user)}
+                    className="p-2 rounded-lg hover:bg-red-50 text-slate-500 hover:text-red-600 transition-colors"
+                    title={user.activo ? 'Desactivar usuario' : 'Activar usuario'}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </td>
             </tr>

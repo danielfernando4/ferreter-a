@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getUsuario } from '../services/api';
-import type { UserOut } from '../types/auth';
 import UserForm from '../components/users/UserForm';
-import { Loader2 } from 'lucide-react';
+import { getUsuario, updateUsuario } from '../services/api';
+import type { UserOut } from '../types/auth';
+import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 
 export default function EditUserPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,60 +14,75 @@ export default function EditUserPage() {
 
   useEffect(() => {
     if (!id) return;
-    const fetchUser = async () => {
-      setIsLoading(true);
+    let cancelled = false;
+    async function load() {
       try {
         const data = await getUsuario(Number(id));
-        setUser(data);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Error al cargar usuario';
-        setError(message);
+        if (!cancelled) setUser(data);
+      } catch (err: any) {
+        if (!cancelled) setError(err.message || 'Error al cargar el usuario');
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
-    };
-    fetchUser();
+    }
+    load();
+    return () => { cancelled = true; };
   }, [id]);
+
+  const handleSave = async (data: { nombre_completo: string; email: string; rol: string }) => {
+    if (!id) return;
+    await updateUsuario(Number(id), {
+      nombre_completo: data.nombre_completo,
+      email: data.email,
+      rol: data.rol,
+    });
+    navigate('/usuarios');
+  };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
       </div>
     );
   }
 
-  if (error) {
+  if (error || !user) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
-        <div className="p-3 rounded-xl bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm">Usuario no encontrado</div>
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <AlertCircle className="w-12 h-12 text-red-400 mb-3" />
+        <p className="text-sm text-red-600">{error || 'Usuario no encontrado'}</p>
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
+        >
+          Volver a usuarios
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
-        <p className="text-sm text-slate-500 mt-1">Modifica los datos del usuario</p>
-      </div>
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <UserForm
-          initialData={user}
-          mode="edit"
-          onSave={() => navigate('/usuarios')}
-          onCancel={() => navigate('/usuarios')}
-        />
+    <div>
+      <button
+        onClick={() => navigate('/usuarios')}
+        className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Volver a usuarios
+      </button>
+
+      <div className="max-w-lg">
+        <h2 className="text-xl font-semibold text-slate-900 mb-1">Editar usuario</h2>
+        <p className="text-sm text-slate-500 mb-6">Actualiza los datos del usuario.</p>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <UserForm
+            initialData={{ nombre_completo: user.nombre_completo, email: user.email, rol: user.rol }}
+            onSave={handleSave}
+            mode="edit"
+          />
+        </div>
       </div>
     </div>
   );

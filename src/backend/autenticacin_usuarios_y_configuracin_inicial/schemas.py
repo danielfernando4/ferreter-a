@@ -1,9 +1,11 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
-# --- Esquemas de Usuario ---
+# ─── Esquemas de Usuario ──────────────────────────────────────────────
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -12,41 +14,41 @@ class UserOut(BaseModel):
     email: str
     rol: str
     activo: bool
-    fecha_registro: datetime
+    fecha_registro: datetime = Field(validation_alias="fecha_creacion")
     ultimo_acceso: Optional[datetime] = None
 
     @field_validator("rol", mode="before")
     @classmethod
     def extract_rol_name(cls, v):
-        return v.nombre if hasattr(v, "nombre") else str(v)
-
-    @field_validator("fecha_registro", mode="before")
-    @classmethod
-    def map_fecha_registro(cls, v):
-        return v
+        if hasattr(v, "nombre"):
+            return v.nombre
+        return str(v)
 
     @field_validator("ultimo_acceso", mode="before")
     @classmethod
-    def handle_none(cls, v):
+    def extract_ultimo_acceso(cls, v):
+        if v is None:
+            return None
         return v
 
 
 class UserCreateRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1)
+    nombre_completo: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    rol: str
+    rol: str = Field(..., pattern=r"^(administrador|vendedor|almacen)$")
 
 
 class UserUpdateRequest(BaseModel):
-    nombre_completo: Optional[str] = None
+    nombre_completo: Optional[str] = Field(None, min_length=1, max_length=150)
     email: Optional[EmailStr] = None
-    rol: Optional[str] = None
+    rol: Optional[str] = Field(None, pattern=r"^(administrador|vendedor|almacen)$")
 
 
-# --- Esquemas de Autenticación ---
+# ─── Esquemas de Autenticación ──────────────────────────────────────────
+
 class LoginRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
     remember: bool = False
 
@@ -58,18 +60,15 @@ class LoginResponse(BaseModel):
     usuario: UserOut
 
 
-class LogoutResponse(BaseModel):
-    mensaje: str
+# ─── Esquemas de Setup ──────────────────────────────────────────────────
 
-
-# --- Esquemas de Setup ---
 class SetupRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1)
+    nombre_completo: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    negocio_nombre: str = Field(..., min_length=1)
+    negocio_nombre: str = Field(..., min_length=1, max_length=200)
     negocio_direccion: str = Field(..., min_length=1)
-    negocio_rfc: str = Field(..., min_length=1)
+    negocio_rfc: str = Field(..., min_length=1, max_length=50)
     negocio_telefono: Optional[str] = None
 
 
@@ -83,13 +82,24 @@ class SetupStatusResponse(BaseModel):
     admin_exists: bool
 
 
-# --- Esquemas de Preferencias ---
+# ─── Esquemas de Preferencias ───────────────────────────────────────────
+
 class PreferenciasOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     idioma: str = "es"
     tema_visual: str = "light"
     zona_horaria: str = "America/Mexico_City"
+
+    @field_validator("zona_horaria", mode="before")
+    @classmethod
+    def map_configuracion_regional(cls, v):
+        """Map the model field configuracion_regional to schema field zona_horaria."""
+        if isinstance(v, str):
+            return v
+        if hasattr(v, "configuracion_regional"):
+            return v.configuracion_regional
+        return "America/Mexico_City"
 
 
 class PreferenciasUpdateRequest(BaseModel):
@@ -98,9 +108,10 @@ class PreferenciasUpdateRequest(BaseModel):
     zona_horaria: Optional[str] = None
 
 
-# --- Esquemas de Recuperación ---
+# ─── Esquemas de Recuperación de Contraseña ─────────────────────────────
+
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 
 class ForgotPasswordResponse(BaseModel):
@@ -132,7 +143,12 @@ class ChangePasswordResponse(BaseModel):
     mensaje: str
 
 
-# --- Esquemas de Respuesta Genéricos ---
+class LogoutResponse(BaseModel):
+    mensaje: str
+
+
+# ─── Esquemas de Respuesta Genéricos ────────────────────────────────────
+
 class PaginatedUsersResponse(BaseModel):
     items: List[UserOut]
     total: int

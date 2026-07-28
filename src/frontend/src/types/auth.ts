@@ -20,23 +20,9 @@ export interface SetupStatusResponse {
   admin_exists: boolean;
 }
 
-export interface SetupRequest {
-  nombre_completo: string;
-  email: string;
-  password: string;
-  negocio_nombre: string;
-  negocio_direccion: string;
-  negocio_rfc: string;
-  negocio_telefono?: string | null;
-}
-
 export interface SetupResponse {
   mensaje: string;
   usuario: UserOut;
-}
-
-export interface ForgotPasswordRequest {
-  email: string;
 }
 
 export interface ForgotPasswordResponse {
@@ -48,27 +34,12 @@ export interface VerifyTokenResponse {
   email: string;
 }
 
-export interface ResetPasswordRequest {
-  token: string;
-  new_password: string;
-  confirm_password: string;
-}
-
 export interface ResetPasswordResponse {
   mensaje: string;
 }
 
-export interface UserCreateRequest {
-  nombre_completo: string;
-  email: string;
-  password: string;
-  rol: string;
-}
-
-export interface UserUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-  rol?: string;
+export interface LogoutResponse {
+  mensaje: string;
 }
 
 export interface PaginatedUsersResponse {
@@ -84,39 +55,18 @@ export interface UserActionResponse {
   usuario: UserOut;
 }
 
-export interface PerfilResponse {
-  usuario: UserOut;
-  preferencias: PreferenciasOut;
-}
-
-export interface PerfilUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-}
-
-export interface ChangePasswordRequest {
-  current_password: string;
-  new_password: string;
-  confirm_password: string;
-}
-
-export interface ChangePasswordResponse {
-  mensaje: string;
-}
-
 export interface PreferenciasOut {
   idioma: string;
   tema_visual: string;
   zona_horaria: string;
 }
 
-export interface PreferenciasUpdateRequest {
-  idioma?: string;
-  tema_visual?: string;
-  zona_horaria?: string;
+export interface PerfilResponse {
+  usuario: UserOut;
+  preferencias: PreferenciasOut;
 }
 
-export interface LogoutResponse {
+export interface ChangePasswordResponse {
   mensaje: string;
 }
 
@@ -125,6 +75,4 @@ export interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setupRequired: boolean;
-  setupLoading: boolean;
 }

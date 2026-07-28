@@ -1,37 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Loader2, RefreshCw } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 import { listUsuarios, deactivateUsuario, reactivateUsuario } from '../services/api';
-import type { UserOut } from '../types/auth';
+import type { UserOut, PaginatedUsersResponse } from '../types/auth';
 import UserTable from '../components/users/UserTable';
 import SearchInput from '../components/users/SearchInput';
 import Pagination from '../components/users/Pagination';
 import DeactivateConfirmModal from '../components/users/DeactivateConfirmModal';
+import { Plus, Loader2, AlertCircle, Users } from 'lucide-react';
 
 export default function UserListPage() {
   const navigate = useNavigate();
-  const [usuarios, setUsuarios] = useState<UserOut[]>([]);
+  const { user: currentUser } = useAuth();
+  const [usuarios, setUsuarios] = useState<PaginatedUsersResponse | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [deactivateTarget, setDeactivateTarget] = useState<UserOut | null>(null);
-  const [reactivateTarget, setReactivateTarget] = useState<UserOut | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
+  const pageSize = 10;
 
   const fetchUsuarios = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
-      const result = await listUsuarios({ search: search || undefined, page, page_size: 10 });
-      setUsuarios(result.items);
-      setTotalPages(result.total_pages);
-      setTotal(result.total);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al cargar usuarios';
-      setError(message);
+      const data = await listUsuarios({ search: search || undefined, page, page_size: pageSize });
+      setUsuarios(data);
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar usuarios');
     } finally {
       setIsLoading(false);
     }
@@ -41,95 +37,87 @@ export default function UserListPage() {
     fetchUsuarios();
   }, [fetchUsuarios]);
 
+  // Debounce search
   useEffect(() => {
-    setPage(1);
+    const timer = setTimeout(() => {
+      if (search !== undefined) setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
   }, [search]);
 
   const handleDeactivate = async () => {
     if (!deactivateTarget) return;
-    setActionLoading(true);
     try {
-      await deactivateUsuario(deactivateTarget.id);
+      if (deactivateTarget.activo) {
+        await deactivateUsuario(deactivateTarget.id);
+      } else {
+        await reactivateUsuario(deactivateTarget.id);
+      }
       setDeactivateTarget(null);
       fetchUsuarios();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al desactivar usuario';
-      setError(message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleReactivate = async () => {
-    if (!reactivateTarget) return;
-    setActionLoading(true);
-    try {
-      await reactivateUsuario(reactivateTarget.id);
-      setReactivateTarget(null);
-      fetchUsuarios();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al reactivar usuario';
-      setError(message);
-    } finally {
-      setActionLoading(false);
+    } catch (err: any) {
+      setError(err.message || 'Error al cambiar el estado del usuario');
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Usuarios</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {total > 0 ? `${total} usuario${total !== 1 ? 's' : ''} registrado${total !== 1 ? 's' : ''}` : 'Gestiona los usuarios del sistema'}
-          </p>
+          <h2 className="text-xl font-semibold text-slate-900">Usuarios</h2>
+          <p className="text-sm text-slate-500 mt-1">Gestiona los usuarios del sistema</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchUsuarios}
-            className="p-2.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-50 transition-all"
-            title="Recargar"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+        {currentUser?.rol === 'administrador' && (
           <button
             onClick={() => navigate('/usuarios/nuevo')}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-all flex items-center gap-2"
+            className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Nuevo usuario</span>
+            Nuevo usuario
           </button>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
+        <div className="p-4 border-b border-slate-200">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar por nombre o email..."
+          />
         </div>
-      </div>
 
-      <div className="max-w-sm">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o email..." />
-      </div>
-
-      {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
-      )}
-
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <AlertCircle className="w-12 h-12 text-red-400 mb-3" />
+            <p className="text-sm text-red-600">{error}</p>
+            <button
+              onClick={fetchUsuarios}
+              className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Reintentar
+            </button>
           </div>
         ) : (
           <>
             <UserTable
-              usuarios={usuarios}
+              usuarios={usuarios?.items || []}
               onEdit={(user) => navigate(`/usuarios/${user.id}/editar`)}
-              onDeactivate={(user) => setDeactivateTarget(user)}
-              onReactivate={(user) => setReactivateTarget(user)}
+              onDeactivate={setDeactivateTarget}
             />
-            <div className="mt-6">
-              <Pagination
-                currentPage={page}
-                totalPages={totalPages}
-                onPageChange={setPage}
-              />
-            </div>
+            {usuarios && usuarios.total_pages > 1 && (
+              <div className="p-4 border-t border-slate-200">
+                <Pagination
+                  currentPage={usuarios.page}
+                  totalPages={usuarios.total_pages}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
           </>
         )}
       </div>
@@ -137,19 +125,9 @@ export default function UserListPage() {
       {deactivateTarget && (
         <DeactivateConfirmModal
           userName={deactivateTarget.nombre_completo}
+          isActive={deactivateTarget.activo}
           onConfirm={handleDeactivate}
           onCancel={() => setDeactivateTarget(null)}
-          isLoading={actionLoading}
-        />
-      )}
-
-      {reactivateTarget && (
-        <DeactivateConfirmModal
-          userName={reactivateTarget.nombre_completo}
-          onConfirm={handleReactivate}
-          onCancel={() => setReactivateTarget(null)}
-          isLoading={actionLoading}
-          isReactivate
         />
       )}
     </div>

@@ -6,4 +6,4 @@ pydantic[email]>=2.10.0
 python-multipart>=0.0.18
 bcrypt>=4.0.0
 email-validator>=2.0.0
-jose
+python-jose[cryptography]>=3.3.0

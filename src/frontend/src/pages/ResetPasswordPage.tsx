@@ -1,91 +1,93 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Store, Loader2, AlertCircle } from 'lucide-react';
-import ResetPasswordForm from '../components/auth/ResetPasswordForm';
-import { verifyResetToken } from '../services/api';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ResetPasswordForm } from '../components/auth/ResetPasswordForm';
+import { LoadingState } from '../components/LoadingState';
+import { ErrorState } from '../components/ErrorState';
+import { KeyRound } from 'lucide-react';
 
-const ResetPasswordPage: React.FC = () => {
+export function ResetPasswordPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const tokenParam = searchParams.get('token') || '';
-  const [isValidating, setIsValidating] = useState(true);
-  const [tokenValido, setTokenValido] = useState(false);
+  const token = searchParams.get('token') || '';
+  const [isVerifying, setIsVerifying] = useState(true);
+  const [isValid, setIsValid] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!tokenParam) {
-      setError('No se proporcionó un token de recuperación.');
-      setIsValidating(false);
+    if (!token) {
+      setError('Token de recuperación no proporcionado');
+      setIsVerifying(false);
       return;
     }
 
-    const validate = async () => {
+    const verifyToken = async () => {
       try {
-        const res = await verifyResetToken(tokenParam);
-        if (res.valido) {
-          setTokenValido(true);
+        const { verifyResetToken } = await import('../services/api');
+        const result = await verifyResetToken(token);
+        if (result.valido) {
+          setIsValid(true);
         } else {
-          setError('El token de recuperación no es válido.');
+          setError('El token de recuperación no es válido');
         }
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'El token de recuperación es inválido o ha expirado.';
-        setError(message);
+        const apiErr = err as { message?: string; status?: number };
+        if (apiErr?.status === 410) {
+          setError('El token ha expirado. Solicita un nuevo enlace de recuperación.');
+        } else {
+          setError(apiErr?.message || 'Error al verificar el token');
+        }
       } finally {
-        setIsValidating(false);
+        setIsVerifying(false);
       }
     };
 
-    validate();
-  }, [tokenParam]);
+    verifyToken();
+  }, [token]);
 
-  if (isValidating) {
+  if (isVerifying) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          <p className="text-sm text-slate-500">Verificando token...</p>
-        </div>
+        <LoadingState message="Verificando token..." />
       </div>
     );
   }
 
-  if (error) {
+  if (!isValid) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center py-8">
-        <div className="bg-white rounded-2xl shadow-sm p-8 max-w-md w-full mx-4 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">
-            Token inválido
-          </h2>
-          <p className="text-sm text-slate-500 mb-6">{error}</p>
-          <a
-            href="/login"
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium inline-block"
-          >
-            Volver al inicio de sesión
-          </a>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <ErrorState
+            title="Token Inválido"
+            message={error}
+            onRetry={() => navigate('/forgot-password')}
+          />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center py-8">
-      <div className="bg-white rounded-2xl shadow-sm p-8 max-w-md w-full mx-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Store className="w-8 h-8 text-blue-600" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl mb-4">
+            <KeyRound className="w-8 h-8 text-blue-600" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900">Ferretería</h2>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Restablecer Contraseña
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Restablece tu contraseña
+            Ingresa tu nueva contraseña
           </p>
         </div>
-        {tokenValido && <ResetPasswordForm token={tokenParam} />}
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <ResetPasswordForm
+            token={token}
+            onSuccess={() => navigate('/login', { replace: true })}
+          />
+        </div>
       </div>
     </div>
   );
-};
-
-export default ResetPasswordPage;
+}

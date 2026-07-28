@@ -1,29 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Store } from 'lucide-react';
-import SetupWizardForm from '../components/auth/SetupWizardForm';
-import LoadingState from '../components/LoadingState';
-import { checkSetupStatus } from '../services/api';
+import { SetupWizardForm } from '../components/auth/SetupWizardForm';
+import { LoadingState } from '../components/LoadingState';
+import { Building2 } from 'lucide-react';
 
-const SetupWizardPage: React.FC = () => {
+export function SetupWizardPage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
 
   useEffect(() => {
-    const verify = async () => {
+    const checkSetup = async () => {
       try {
+        const { checkSetupStatus } = await import('../services/api');
         const status = await checkSetupStatus();
         if (status.setup_completed || status.admin_exists) {
           navigate('/login', { replace: true });
+          return;
         }
       } catch {
-        setError('Error al verificar el estado del sistema.');
-      } finally {
-        setIsLoading(false);
+        // If check fails, show wizard
       }
+      setIsLoading(false);
     };
-    verify();
+    checkSetup();
   }, [navigate]);
 
   if (isLoading) {
@@ -34,45 +33,25 @@ const SetupWizardPage: React.FC = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-sm p-8 max-w-md w-full mx-4 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Store className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">
-            Error de conexión
-          </h2>
-          <p className="text-sm text-slate-500 mb-6">{error}</p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium"
-          >
-            Reintentar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center py-8">
-      <div className="bg-white rounded-2xl shadow-sm p-8 max-w-lg w-full mx-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-lg">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Store className="w-8 h-8 text-blue-600" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl mb-4">
+            <Building2 className="w-8 h-8 text-blue-600" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900">Ferretería</h2>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Configuración Inicial
+          </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Configuración inicial del sistema
+            Bienvenido a Ferretería. Configura tu sistema en pocos pasos.
           </p>
         </div>
-        <SetupWizardForm />
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <SetupWizardForm onComplete={() => navigate('/login', { replace: true })} />
+        </div>
       </div>
     </div>
   );
-};
-
-export default SetupWizardPage;
+}

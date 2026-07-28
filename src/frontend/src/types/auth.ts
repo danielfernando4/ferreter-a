@@ -1,7 +1,4 @@
-// ============================================================
-// Types for Autenticación, Usuarios y Configuración Inicial
-// ============================================================
-
+// User types
 export interface UserOut {
   id: number;
   nombre_completo: string;
@@ -25,6 +22,7 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
+// Auth types
 export interface LoginRequest {
   email: string;
   password: string;
@@ -38,6 +36,11 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
+export interface SetupStatusResponse {
+  setup_completed: boolean;
+  admin_exists: boolean;
+}
+
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -48,16 +51,12 @@ export interface SetupRequest {
   negocio_telefono?: string;
 }
 
-export interface SetupStatusResponse {
-  setup_completed: boolean;
-  admin_exists: boolean;
-}
-
 export interface SetupResponse {
   mensaje: string;
   usuario: UserOut;
 }
 
+// Preferences
 export interface PreferenciasOut {
   idioma: string;
   tema_visual: string;
@@ -70,6 +69,7 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
+// Password recovery
 export interface ForgotPasswordRequest {
   email: string;
 }
@@ -103,6 +103,18 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
+// Profile
+export interface PerfilResponse {
+  usuario: UserOut;
+  preferencias: PreferenciasOut;
+}
+
+export interface PerfilUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+}
+
+// Paginated response
 export interface PaginatedUsersResponse {
   items: UserOut[];
   total: number;
@@ -116,16 +128,11 @@ export interface UserActionResponse {
   usuario: UserOut;
 }
 
-export interface PerfilResponse {
-  usuario: UserOut;
-  preferencias: PreferenciasOut;
-}
-
 export interface LogoutResponse {
   mensaje: string;
 }
 
-// Auth state for context
+// Auth state
 export interface AuthState {
   user: UserOut | null;
   token: string | null;
@@ -134,7 +141,8 @@ export interface AuthState {
 }
 
 export interface AuthContextType extends AuthState {
-  login: (token: string, usuario: UserOut) => void;
-  logout: () => void;
-  updateUser: (usuario: UserOut) => void;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
+  logout: () => Promise<void>;
+  updateUser: (user: UserOut) => void;
+  setupRequired?: boolean;
 }

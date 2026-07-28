@@ -1,22 +1,19 @@
-# Configuración general del sistema
+import os
+from datetime import timedelta
 
-# JWT / Tokens
-SECRET_KEY = "ferretera-secret-key-change-in-production"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60  # 1 hora
-REMEMBER_TOKEN_EXPIRE_DAYS = 30   # 30 días
-RESET_TOKEN_EXPIRE_HOURS = 1      # 1 hora
 
-# Roles predefinidos
-ROLES = {
-    "administrador": "Acceso completo al sistema",
-    "vendedor": "Acceso al punto de venta y consulta de inventario",
-    "almacen": "Acceso a inventario, órdenes de compra y productos",
-}
+class Settings:
+    APP_NAME: str = "Ferretera POS"
+    VERSION: str = "1.0.0"
+    DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
 
-# SMTP (para recuperación de contraseña - configurar en producción)
-SMTP_HOST = ""
-SMTP_PORT = 587
-SMTP_USER = ""
-SMTP_PASSWORD = ""
-SMTP_FROM = "noreply@ferretera.com"
+    # Token configuration
+    TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour for regular tokens
+    PERSISTENT_TOKEN_EXPIRE_DAYS: int = 30  # 30 days for "remember me"
+    RESET_TOKEN_EXPIRE_HOURS: int = 1  # 1 hour for password reset tokens
+
+    # Roles predefinidos
+    ROLES: list[str] = ["administrador", "vendedor", "almacen"]
+
+
+settings = Settings()

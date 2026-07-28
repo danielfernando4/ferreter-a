@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { Mail, Loader2, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { forgotPassword } from '../../services/api';
+import { Loader2, CheckCircle } from 'lucide-react';
 
 interface ForgotPasswordFormProps {
-  onSuccess?: () => void;
+  onSuccess: () => void;
 }
 
-const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onSuccess }) => {
+export function ForgotPasswordForm({ onSuccess }: ForgotPasswordFormProps) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -15,21 +13,19 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onSuccess }) =>
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) {
-      setError('Ingresa tu correo electrónico.');
-      return;
-    }
-
-    setIsLoading(true);
     setError('');
+    setIsLoading(true);
 
     try {
-      await forgotPassword({ email: email.trim() });
+      const { forgotPassword } = await import('../../services/api');
+      await forgotPassword({ email });
       setSent(true);
-      if (onSuccess) onSuccess();
+      setTimeout(() => {
+        onSuccess();
+      }, 3000);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al procesar la solicitud.';
-      setError(message);
+      const apiErr = err as { message?: string };
+      setError(apiErr?.message || 'Error al procesar la solicitud');
     } finally {
       setIsLoading(false);
     }
@@ -37,21 +33,14 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onSuccess }) =>
 
   if (sent) {
     return (
-      <div className="text-center space-y-4">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-          <Mail className="w-8 h-8 text-green-600" />
-        </div>
-        <h3 className="text-lg font-semibold text-slate-900">Correo enviado</h3>
-        <p className="text-sm text-slate-500">
-          Si el correo ingresado está registrado, recibirás un enlace para restablecer tu contraseña.
+      <div className="flex flex-col items-center justify-center py-8">
+        <CheckCircle className="w-12 h-12 text-green-500 mb-4" />
+        <h3 className="text-lg font-semibold text-slate-900 mb-2">
+          Correo Enviado
+        </h3>
+        <p className="text-sm text-slate-500 text-center">
+          Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.
         </p>
-        <Link
-          to="/login"
-          className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver al inicio de sesión
-        </Link>
       </div>
     );
   }
@@ -59,14 +48,17 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onSuccess }) =>
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700">
           {error}
         </div>
       )}
 
       <div>
-        <label htmlFor="reset-email" className="block text-sm font-medium text-slate-700 mb-1">
-          Correo electrónico
+        <label
+          htmlFor="reset-email"
+          className="block text-sm font-medium text-slate-700 mb-1.5"
+        >
+          Correo Electrónico
         </label>
         <input
           id="reset-email"
@@ -74,35 +66,25 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({ onSuccess }) =>
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="correo@ejemplo.com"
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
-          autoComplete="email"
+          required
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {isLoading ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Enviando...
+          </>
         ) : (
-          <Mail className="w-4 h-4" />
+          'Enviar Enlace de Recuperación'
         )}
-        {isLoading ? 'Enviando...' : 'Enviar enlace de recuperación'}
       </button>
-
-      <div className="text-center">
-        <Link
-          to="/login"
-          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-700 font-medium"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver al inicio de sesión
-        </Link>
-      </div>
     </form>
   );
-};
-
-export default ForgotPasswordForm;
+}

@@ -1,25 +1,19 @@
-import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
-import { Navbar } from './Navbar';
+import type { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
+import { Navbar } from './Navbar';
 
-export function AppLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+interface AppLayoutProps {
+  children: ReactNode;
+}
 
+export function AppLayout({ children }: AppLayoutProps) {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Sidebar open={sidebarOpen} />
-      <div
-        className={`transition-all duration-300 ${
-          sidebarOpen ? 'ml-64' : 'ml-0 lg:ml-16'
-        }`}
-      >
-        <Navbar
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        />
-        <main className="p-6">
-          <Outlet />
+    <div className="flex min-h-screen bg-slate-50">
+      <Sidebar />
+      <div className="flex-1 flex flex-col">
+        <Navbar />
+        <main className="flex-1 p-6">
+          <div className="max-w-7xl mx-auto">{children}</div>
         </main>
       </div>
     </div>

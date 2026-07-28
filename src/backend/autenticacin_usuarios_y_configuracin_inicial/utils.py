@@ -2,26 +2,24 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from passlib.context import CryptContext
+import bcrypt
 
 from config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def _normalize_password(pw: str) -> str:
-    """SHA-256 pre-hash prevents bcrypt 72-byte truncation."""
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
 
 
 def hash_password(pw: str) -> str:
-    """Hash a password using bcrypt with SHA-256 pre-hashing."""
-    return pwd_context.hash(_normalize_password(pw))
+    # SHA-256 pre-hash prevents bcrypt 72-byte truncation
+    normalized = _normalize_password(pw).encode()
+    return bcrypt.hashpw(normalized, bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plain password against a bcrypt hash (with SHA-256 pre-hashing)."""
-    return pwd_context.verify(_normalize_password(plain), hashed)
+    normalized = _normalize_password(plain).encode()
+    return bcrypt.checkpw(normalized, hashed.encode())
 
 
 def generate_token() -> str:
@@ -34,13 +32,16 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def compute_token_expiry(remember: bool = False) -> datetime:
-    """Compute token expiry datetime based on whether 'remember me' is set."""
-    if remember:
-        return datetime.now(timezone.utc) + timedelta(days=settings.PERSISTENT_TOKEN_EXPIRE_DAYS)
-    return datetime.now(timezone.utc) + timedelta(minutes=settings.TOKEN_EXPIRE_MINUTES)
+def get_token_expiration(persistent: bool = False) -> datetime:
+    """Get expiration datetime for a token."""
+    if persistent:
+        delta = timedelta(days=settings.TOKEN_EXPIRATION_PERSISTENT_DAYS)
+    else:
+        delta = timedelta(minutes=settings.TOKEN_EXPIRATION_MINUTES)
+    return datetime.now(timezone.utc) + delta
 
 
-def compute_reset_token_expiry() -> datetime:
-    """Compute reset token expiry datetime."""
-    return datetime.now(timezone.utc) + timedelta(hours=settings.RESET_TOKEN_EXPIRE_HOURS)
+def get_reset_token_expiration() -> datetime:
+    """Get expiration datetime for a reset token."""
+    delta = timedelta(hours=settings.RESET_TOKEN_EXPIRATION_HOURS)
+    return datetime.now(timezone.utc) + delta

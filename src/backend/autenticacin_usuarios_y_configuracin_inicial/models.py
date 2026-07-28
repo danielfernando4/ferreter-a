@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 
@@ -9,69 +9,52 @@ from database import Base
 class Rol(Base):
     __tablename__ = "roles"
 
-    id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(50), unique=True, nullable=False, index=True)
-    descripcion = Column(Text, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    descripcion: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
-    usuarios = relationship("Usuario", back_populates="rol")
+    usuarios: Mapped[list["Usuario"]] = relationship("Usuario", back_populates="rol")
 
     def __repr__(self) -> str:
-        return f"<Rol {self.nombre}>"
+        return f"<Rol id={self.id} nombre={self.nombre}>"
 
 
 class Usuario(Base):
     __tablename__ = "usuarios"
 
-    id = Column(Integer, primary_key=True, index=True)
-    nombre_completo = Column(String(255), nullable=False)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
-    activo = Column(Boolean, default=True, nullable=False)
-    rol_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
-    fecha_registro = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
-    fecha_actualizacion = Column(
-        DateTime,
-        default=datetime.now(timezone.utc),
-        onupdate=datetime.now(timezone.utc),
-        nullable=False,
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre_completo: Mapped[str] = mapped_column(String(150), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    rol_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id"), nullable=False)
+    fecha_registro: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), nullable=False
     )
-    ultimo_acceso = Column(DateTime, nullable=True)
+    ultimo_acceso: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    fecha_actualizacion: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), onupdate=datetime.now(timezone.utc), nullable=False
+    )
 
-    rol = relationship("Rol", back_populates="usuarios")
-    preferencias = relationship("PreferenciasUsuario", uselist=False, back_populates="usuario", cascade="all, delete-orphan")
-    tokens_sesion = relationship("TokenSesion", back_populates="usuario", cascade="all, delete-orphan")
-    tokens_restablecimiento = relationship("TokenRestablecimiento", back_populates="usuario", cascade="all, delete-orphan")
-
-    def __repr__(self) -> str:
-        return f"<Usuario {self.email}>"
-
-
-class ConfiguracionNegocio(Base):
-    __tablename__ = "configuracion_negocio"
-
-    id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(255), nullable=False)
-    direccion = Column(String(500), nullable=False)
-    datos_fiscales = Column(String(255), nullable=False)
-    telefono = Column(String(50), nullable=True)
-    email_contacto = Column(String(255), nullable=True)
-    setup_completado = Column(Boolean, default=False, nullable=False)
-    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
+    rol: Mapped["Rol"] = relationship("Rol", back_populates="usuarios")
+    preferencias: Mapped["PreferenciasUsuario"] = relationship("PreferenciasUsuario", back_populates="usuario", uselist=False)
+    tokens_sesion: Mapped[list["TokenSesion"]] = relationship("TokenSesion", back_populates="usuario")
+    tokens_restablecimiento: Mapped[list["TokenRestablecimiento"]] = relationship("TokenRestablecimiento", back_populates="usuario")
 
     def __repr__(self) -> str:
-        return f"<ConfiguracionNegocio {self.nombre}>"
+        return f"<Usuario id={self.id} email={self.email}>"
 
 
 class PreferenciasUsuario(Base):
     __tablename__ = "preferencias_usuario"
 
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id"), unique=True, nullable=False)
-    idioma = Column(String(10), default="es", nullable=False)
-    tema_visual = Column(String(20), default="light", nullable=False)
-    zona_horaria = Column(String(50), default="America/Mexico_City", nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    usuario_id: Mapped[int] = mapped_column(Integer, ForeignKey("usuarios.id"), unique=True, nullable=False)
+    idioma: Mapped[str] = mapped_column(String(10), default="es", nullable=False)
+    tema_visual: Mapped[str] = mapped_column(String(20), default="light", nullable=False)
+    configuracion_regional: Mapped[str] = mapped_column(String(20), default="es-MX", nullable=False)
 
-    usuario = relationship("Usuario", back_populates="preferencias")
+    usuario: Mapped["Usuario"] = relationship("Usuario", back_populates="preferencias")
 
     def __repr__(self) -> str:
         return f"<PreferenciasUsuario usuario_id={self.usuario_id}>"
@@ -80,31 +63,53 @@ class PreferenciasUsuario(Base):
 class TokenSesion(Base):
     __tablename__ = "tokens_sesion"
 
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    token_hash = Column(String(255), unique=True, nullable=False, index=True)
-    es_persistente = Column(Boolean, default=False, nullable=False)
-    fecha_expiracion = Column(DateTime, nullable=False)
-    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
-    activo = Column(Boolean, default=True, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    usuario_id: Mapped[int] = mapped_column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    es_persistente: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fecha_expiracion: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    fecha_creacion: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), nullable=False
+    )
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    usuario = relationship("Usuario", back_populates="tokens_sesion")
+    usuario: Mapped["Usuario"] = relationship("Usuario", back_populates="tokens_sesion")
 
     def __repr__(self) -> str:
-        return f"<TokenSesion usuario_id={self.usuario_id}>"
+        return f"<TokenSesion id={self.id} usuario_id={self.usuario_id}>"
 
 
 class TokenRestablecimiento(Base):
     __tablename__ = "tokens_restablecimiento"
 
-    id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    token_hash = Column(String(255), unique=True, nullable=False, index=True)
-    fecha_expiracion = Column(DateTime, nullable=False)
-    utilizado = Column(Boolean, default=False, nullable=False)
-    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    usuario_id: Mapped[int] = mapped_column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    fecha_expiracion: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    utilizado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fecha_creacion: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), nullable=False
+    )
 
-    usuario = relationship("Usuario", back_populates="tokens_restablecimiento")
+    usuario: Mapped["Usuario"] = relationship("Usuario", back_populates="tokens_restablecimiento")
 
     def __repr__(self) -> str:
-        return f"<TokenRestablecimiento usuario_id={self.usuario_id}>"
+        return f"<TokenRestablecimiento id={self.id} usuario_id={self.usuario_id}>"
+
+
+class ConfiguracionNegocio(Base):
+    __tablename__ = "configuracion_negocio"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(255), nullable=False)
+    direccion: Mapped[str] = mapped_column(Text, nullable=False)
+    datos_fiscales: Mapped[str] = mapped_column(Text, nullable=False)
+    telefono: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    email_contacto: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    setup_completado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fecha_creacion: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<ConfiguracionNegocio id={self.id} nombre={self.nombre}>"

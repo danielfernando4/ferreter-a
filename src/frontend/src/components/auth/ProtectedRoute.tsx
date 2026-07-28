@@ -1,29 +1,25 @@
-import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { LoadingState } from '../LoadingState';
+import { LoadingState } from '../ui/LoadingState';
+import type { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
-  children: React.ReactNode;
+  children: ReactNode;
   requiredRole?: string;
 }
 
 export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, user, setupRequired } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return <LoadingState message="Verificando sesión..." />;
-  }
-
-  if (setupRequired) {
-    return <Navigate to="/setup-wizard" replace />;
   }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user?.rol !== requiredRole && user?.rol !== 'administrador') {
+  if (requiredRole && user && user.rol !== requiredRole && user.rol !== 'administrador') {
     return <Navigate to="/" replace />;
   }
 

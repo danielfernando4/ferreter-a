@@ -1,46 +1,51 @@
-import React, { useState } from 'react';
-import { Loader2, CheckCircle } from 'lucide-react';
+import { useState } from 'react';
+import { forgotPassword } from '../../services/api';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface ForgotPasswordFormProps {
-  onSuccess: () => void;
+  onSuccess?: () => void;
 }
 
 export function ForgotPasswordForm({ onSuccess }: ForgotPasswordFormProps) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     try {
-      const { forgotPassword } = await import('../../services/api');
       await forgotPassword({ email });
-      setSent(true);
-      setTimeout(() => {
-        onSuccess();
-      }, 3000);
+      setEmailSent(true);
+      if (onSuccess) onSuccess();
     } catch (err: unknown) {
-      const apiErr = err as { message?: string };
-      setError(apiErr?.message || 'Error al procesar la solicitud');
+      const message = err instanceof Error ? err.message : 'Error al procesar solicitud';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (sent) {
+  if (emailSent) {
     return (
-      <div className="flex flex-col items-center justify-center py-8">
-        <CheckCircle className="w-12 h-12 text-green-500 mb-4" />
-        <h3 className="text-lg font-semibold text-slate-900 mb-2">
-          Correo Enviado
-        </h3>
-        <p className="text-sm text-slate-500 text-center">
-          Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.
+      <div className="text-center space-y-4">
+        <div className="bg-green-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
+          <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-900">Correo enviado</h3>
+        <p className="text-sm text-slate-500">
+          Si el correo ingresado está registrado, recibirás un enlace para restablecer tu contraseña.
         </p>
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Volver al inicio de sesión
+        </Link>
       </div>
     );
   }
@@ -48,43 +53,44 @@ export function ForgotPasswordForm({ onSuccess }: ForgotPasswordFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
           {error}
         </div>
       )}
 
       <div>
-        <label
-          htmlFor="reset-email"
-          className="block text-sm font-medium text-slate-700 mb-1.5"
-        >
-          Correo Electrónico
+        <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+          Correo electrónico
         </label>
         <input
-          id="reset-email"
+          id="email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="correo@ejemplo.com"
           required
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+          placeholder="correo@ejemplo.com"
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-all text-sm font-medium flex items-center justify-center gap-2"
       >
-        {isLoading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Enviando...
-          </>
-        ) : (
-          'Enviar Enlace de Recuperación'
-        )}
+        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isLoading ? 'Enviando...' : 'Enviar enlace de recuperación'}
       </button>
+
+      <div className="text-center">
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Volver al inicio de sesión
+        </Link>
+      </div>
     </form>
   );
 }

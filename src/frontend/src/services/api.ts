@@ -1,26 +1,26 @@
 import type {
+  UserOut,
+  UserCreateRequest,
+  UserUpdateRequest,
+  LoginRequest,
+  LoginResponse,
   SetupStatusResponse,
   SetupRequest,
   SetupResponse,
-  LoginRequest,
-  LoginResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   VerifyTokenResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
-  UserOut,
-  UserCreateRequest,
-  UserUpdateRequest,
-  PaginatedUsersResponse,
-  UserActionResponse,
-  PerfilResponse,
-  PerfilUpdateRequest,
   ChangePasswordRequest,
   ChangePasswordResponse,
+  LogoutResponse,
+  PaginatedUsersResponse,
+  UserActionResponse,
   PreferenciasOut,
   PreferenciasUpdateRequest,
-  LogoutResponse,
+  PerfilResponse,
+  PerfilUpdateRequest,
 } from '../types/auth';
 
 const API_URL = '/api/autenticacin_usuarios_y_configuracin_inicial';
@@ -38,11 +38,12 @@ async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('auth_token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -55,14 +56,10 @@ async function request<T>(
   if (!response.ok) {
     let errorMessage = `Error ${response.status}`;
     try {
-      const errorData = await response.json();
-      if (errorData.detail) {
-        errorMessage = errorData.detail;
-      } else if (errorData.mensaje) {
-        errorMessage = errorData.mensaje;
-      }
+      const errorBody = await response.json();
+      errorMessage = errorBody.detail || errorBody.mensaje || errorMessage;
     } catch {
-      // ignore parse error
+      // ignore parse errors
     }
     throw new ApiError(errorMessage, response.status);
   }
@@ -70,72 +67,77 @@ async function request<T>(
   return response.json();
 }
 
-// ==================== AUTH ENDPOINTS ====================
+// --- Auth endpoints (public) ---
 
 export function checkSetupStatus(): Promise<SetupStatusResponse> {
-  return request<SetupStatusResponse>('/auth/check-setup');
+  return request<SetupStatusResponse>('/check-setup');
 }
 
 export function runSetup(data: SetupRequest): Promise<SetupResponse> {
-  return request<SetupResponse>('/auth/setup', {
+  return request<SetupResponse>('/setup', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export function loginUser(data: LoginRequest): Promise<LoginResponse> {
-  return request<LoginResponse>('/auth/login', {
+export function login(data: LoginRequest): Promise<LoginResponse> {
+  return request<LoginResponse>('/login', {
     method: 'POST',
     body: JSON.stringify(data),
-  });
-}
-
-export function getMe(): Promise<UserOut> {
-  return request<UserOut>('/auth/me');
-}
-
-export function logoutUser(): Promise<LogoutResponse> {
-  return request<LogoutResponse>('/auth/logout', {
-    method: 'POST',
   });
 }
 
 export function forgotPassword(
   data: ForgotPasswordRequest
 ): Promise<ForgotPasswordResponse> {
-  return request<ForgotPasswordResponse>('/auth/forgot-password', {
+  return request<ForgotPasswordResponse>('/forgot-password', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export function verifyResetToken(token: string): Promise<VerifyTokenResponse> {
-  return request<VerifyTokenResponse>(`/auth/verify-reset-token/${token}`);
+export function verifyResetToken(
+  token: string
+): Promise<VerifyTokenResponse> {
+  return request<VerifyTokenResponse>(
+    `/verify-reset-token/${token}`
+  );
 }
 
 export function resetPassword(
   data: ResetPasswordRequest
 ): Promise<ResetPasswordResponse> {
-  return request<ResetPasswordResponse>('/auth/reset-password', {
+  return request<ResetPasswordResponse>('/reset-password', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-// ==================== USUARIOS ENDPOINTS ====================
+// --- Auth endpoints (protected) ---
 
-export function listUsuarios(params?: {
-  search?: string;
-  page?: number;
-  page_size?: number;
-}): Promise<PaginatedUsersResponse> {
-  const searchParams = new URLSearchParams();
-  if (params?.search) searchParams.set('search', params.search);
-  if (params?.page) searchParams.set('page', String(params.page));
-  if (params?.page_size) searchParams.set('page_size', String(params.page_size));
-  const queryString = searchParams.toString();
+export function getMe(): Promise<UserOut> {
+  return request<UserOut>('/me');
+}
+
+export function logout(): Promise<LogoutResponse> {
+  return request<LogoutResponse>('/logout', {
+    method: 'POST',
+  });
+}
+
+// --- User management endpoints (protected, admin) ---
+
+export function listUsuarios(
+  search?: string,
+  page: number = 1,
+  pageSize: number = 10
+): Promise<PaginatedUsersResponse> {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  params.set('page', String(page));
+  params.set('page_size', String(pageSize));
   return request<PaginatedUsersResponse>(
-    `/usuarios${queryString ? `?${queryString}` : ''}`
+    `/usuarios?${params.toString()}`
   );
 }
 
@@ -143,7 +145,9 @@ export function getUsuario(id: number): Promise<UserOut> {
   return request<UserOut>(`/usuarios/${id}`);
 }
 
-export function createUsuario(data: UserCreateRequest): Promise<UserOut> {
+export function createUsuario(
+  data: UserCreateRequest
+): Promise<UserOut> {
   return request<UserOut>('/usuarios', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -160,25 +164,31 @@ export function updateUsuario(
   });
 }
 
-export function deactivateUsuario(id: number): Promise<UserActionResponse> {
+export function deactivateUsuario(
+  id: number
+): Promise<UserActionResponse> {
   return request<UserActionResponse>(`/usuarios/${id}/deactivate`, {
     method: 'PATCH',
   });
 }
 
-export function reactivateUsuario(id: number): Promise<UserActionResponse> {
+export function reactivateUsuario(
+  id: number
+): Promise<UserActionResponse> {
   return request<UserActionResponse>(`/usuarios/${id}/reactivate`, {
     method: 'PATCH',
   });
 }
 
-// ==================== PERFIL ENDPOINTS ====================
+// --- Profile endpoints (protected) ---
 
 export function getPerfil(): Promise<PerfilResponse> {
   return request<PerfilResponse>('/perfil');
 }
 
-export function updatePerfil(data: PerfilUpdateRequest): Promise<UserOut> {
+export function updatePerfil(
+  data: PerfilUpdateRequest
+): Promise<UserOut> {
   return request<UserOut>('/perfil', {
     method: 'PUT',
     body: JSON.stringify(data),

@@ -1,4 +1,3 @@
-// User types
 export interface UserOut {
   id: number;
   nombre_completo: string;
@@ -22,7 +21,6 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
-// Auth types
 export interface LoginRequest {
   email: string;
   password: string;
@@ -56,20 +54,6 @@ export interface SetupResponse {
   usuario: UserOut;
 }
 
-// Preferences
-export interface PreferenciasOut {
-  idioma: string;
-  tema_visual: string;
-  zona_horaria: string;
-}
-
-export interface PreferenciasUpdateRequest {
-  idioma?: string;
-  tema_visual?: string;
-  zona_horaria?: string;
-}
-
-// Password recovery
 export interface ForgotPasswordRequest {
   email: string;
 }
@@ -103,18 +87,10 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
-// Profile
-export interface PerfilResponse {
-  usuario: UserOut;
-  preferencias: PreferenciasOut;
+export interface LogoutResponse {
+  mensaje: string;
 }
 
-export interface PerfilUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-}
-
-// Paginated response
 export interface PaginatedUsersResponse {
   items: UserOut[];
   total: number;
@@ -128,21 +104,31 @@ export interface UserActionResponse {
   usuario: UserOut;
 }
 
-export interface LogoutResponse {
-  mensaje: string;
+export interface PreferenciasOut {
+  idioma: string;
+  tema_visual: string;
+  zona_horaria: string;
 }
 
-// Auth state
+export interface PreferenciasUpdateRequest {
+  idioma?: string;
+  tema_visual?: string;
+  zona_horaria?: string;
+}
+
+export interface PerfilResponse {
+  usuario: UserOut;
+  preferencias: PreferenciasOut;
+}
+
+export interface PerfilUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+}
+
 export interface AuthState {
   user: UserOut | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-}
-
-export interface AuthContextType extends AuthState {
-  login: (email: string, password: string, remember?: boolean) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUser: (user: UserOut) => void;
-  setupRequired?: boolean;
 }

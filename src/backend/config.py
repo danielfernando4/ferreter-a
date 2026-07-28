@@ -1,19 +1,24 @@
 import os
-from datetime import timedelta
 
 
 class Settings:
-    APP_NAME: str = "Ferretera POS"
+    APP_NAME: str = "Ferretería - Sistema de Gestión"
     VERSION: str = "1.0.0"
-    DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
 
-    # Token configuration
-    TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour for regular tokens
-    PERSISTENT_TOKEN_EXPIRE_DAYS: int = 30  # 30 days for "remember me"
-    RESET_TOKEN_EXPIRE_HOURS: int = 1  # 1 hour for password reset tokens
+    # Token settings
+    TOKEN_EXPIRATION_MINUTES: int = 60
+    TOKEN_EXPIRATION_PERSISTENT_DAYS: int = 30
+    RESET_TOKEN_EXPIRATION_HOURS: int = 1
 
-    # Roles predefinidos
-    ROLES: list[str] = ["administrador", "vendedor", "almacen"]
+    # Database
+    DATABASE_URL: str = "sqlite+aiosqlite:///./ferretera.db"
+
+    # SMTP (placeholder - no real sending in MVP)
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "noreply@ferreteria.local")
 
 
 settings = Settings()

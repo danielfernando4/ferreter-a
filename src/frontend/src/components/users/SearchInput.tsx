@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface SearchInputProps {
   value: string;
@@ -13,7 +13,7 @@ export function SearchInput({
   placeholder = 'Buscar...',
 }: SearchInputProps) {
   const [localValue, setLocalValue] = useState(value);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setLocalValue(value);
@@ -22,14 +22,11 @@ export function SearchInput({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setLocalValue(newValue);
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    debounceRef.current = setTimeout(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    const timer = setTimeout(() => {
       onChange(newValue);
-    }, 300);
+    }, 400);
+    setDebounceTimer(timer);
   };
 
   return (
@@ -40,7 +37,7 @@ export function SearchInput({
         value={localValue}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+        className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
       />
     </div>
   );

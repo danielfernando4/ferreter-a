@@ -1,350 +1,277 @@
-import React, { useState } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { runSetup } from '../../services/api';
+import { Loader2, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface SetupWizardFormProps {
   onComplete: () => void;
+}
+
+interface FormData {
+  nombre_completo: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  negocio_nombre: string;
+  negocio_direccion: string;
+  negocio_rfc: string;
+  negocio_telefono: string;
 }
 
 export function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [formData, setFormData] = useState<FormData>({
+    nombre_completo: '',
+    email: '',
+    password: '',
+    confirm_password: '',
+    negocio_nombre: '',
+    negocio_direccion: '',
+    negocio_rfc: '',
+    negocio_telefono: '',
+  });
 
-  // Step 1: Admin account
-  const [nombreCompleto, setNombreCompleto] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  // Step 2: Business data
-  const [negocioNombre, setNegocioNombre] = useState('');
-  const [negocioDireccion, setNegocioDireccion] = useState('');
-  const [negocioRfc, setNegocioRfc] = useState('');
-  const [negocioTelefono, setNegocioTelefono] = useState('');
-
-  const [success, setSuccess] = useState(false);
+  const updateField = (field: keyof FormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   const validateStep1 = () => {
-    if (!nombreCompleto.trim()) return 'El nombre es obligatorio';
-    if (!email.trim()) return 'El correo es obligatorio';
-    if (!password) return 'La contraseña es obligatoria';
-    if (password.length < 6) return 'La contraseña debe tener al menos 6 caracteres';
-    if (password !== confirmPassword) return 'Las contraseñas no coinciden';
+    if (!formData.nombre_completo.trim()) return 'El nombre es obligatorio';
+    if (!formData.email.trim()) return 'El correo es obligatorio';
+    if (!formData.password) return 'La contraseña es obligatoria';
+    if (formData.password.length < 6) return 'La contraseña debe tener al menos 6 caracteres';
+    if (formData.password !== formData.confirm_password) return 'Las contraseñas no coinciden';
     return '';
   };
 
   const validateStep2 = () => {
-    if (!negocioNombre.trim()) return 'El nombre del negocio es obligatorio';
-    if (!negocioDireccion.trim()) return 'La dirección es obligatoria';
-    if (!negocioRfc.trim()) return 'El RFC es obligatorio';
+    if (!formData.negocio_nombre.trim()) return 'El nombre del negocio es obligatorio';
+    if (!formData.negocio_direccion.trim()) return 'La dirección es obligatoria';
+    if (!formData.negocio_rfc.trim()) return 'El RFC es obligatorio';
     return '';
   };
 
   const handleNext = () => {
+    setError('');
     const validationError = step === 1 ? validateStep1() : validateStep2();
     if (validationError) {
       setError(validationError);
       return;
     }
+    setStep((s) => s + 1);
+  };
+
+  const handleBack = () => {
     setError('');
-    setStep(step + 1);
+    setStep((s) => s - 1);
   };
 
   const handleSubmit = async () => {
-    const validationError = validateStep2();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    setIsLoading(true);
     setError('');
-
+    setIsLoading(true);
     try {
-      const { runSetup } = await import('../../services/api');
       await runSetup({
-        nombre_completo: nombreCompleto.trim(),
-        email: email.trim(),
-        password,
-        negocio_nombre: negocioNombre.trim(),
-        negocio_direccion: negocioDireccion.trim(),
-        negocio_rfc: negocioRfc.trim(),
-        negocio_telefono: negocioTelefono.trim() || undefined,
+        nombre_completo: formData.nombre_completo,
+        email: formData.email,
+        password: formData.password,
+        negocio_nombre: formData.negocio_nombre,
+        negocio_direccion: formData.negocio_direccion,
+        negocio_rfc: formData.negocio_rfc,
+        negocio_telefono: formData.negocio_telefono || undefined,
       });
-      setSuccess(true);
-      setTimeout(() => {
-        onComplete();
-      }, 2000);
+      onComplete();
     } catch (err: unknown) {
-      const apiErr = err as { message?: string };
-      setError(apiErr?.message || 'Error al guardar la configuración inicial');
+      const message = err instanceof Error ? err.message : 'Error al guardar configuración inicial';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (success) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-          <Check className="w-8 h-8 text-green-600" />
-        </div>
-        <h3 className="text-lg font-semibold text-slate-900 mb-2">
-          ¡Configuración Completada!
-        </h3>
-        <p className="text-sm text-slate-500">
-          Redirigiendo al inicio de sesión...
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div>
+    <div className="space-y-6">
       {/* Steps indicator */}
-      <div className="flex items-center gap-2 mb-8">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            step >= 1
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-200 text-slate-500'
-          }`}
-        >
-          1
-        </div>
-        <div
-          className={`flex-1 h-0.5 ${
-            step >= 2 ? 'bg-blue-600' : 'bg-slate-200'
-          }`}
-        />
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            step >= 2
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-200 text-slate-500'
-          }`}
-        >
-          2
-        </div>
-        <div
-          className={`flex-1 h-0.5 ${
-            step >= 3 ? 'bg-blue-600' : 'bg-slate-200'
-          }`}
-        />
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            step >= 3
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-200 text-slate-500'
-          }`}
-        >
-          3
-        </div>
+      <div className="flex items-center justify-center gap-2">
+        {[1, 2, 3].map((s) => (
+          <div key={s} className="flex items-center gap-2">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                s < step
+                  ? 'bg-green-500 text-white'
+                  : s === step
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-200 text-slate-500'
+              }`}
+            >
+              {s < step ? <Check className="w-4 h-4" /> : s}
+            </div>
+            {s < 3 && (
+              <div className={`h-1 w-12 rounded ${s < step ? 'bg-green-500' : 'bg-slate-200'}`} />
+            )}
+          </div>
+        ))}
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700 mb-5">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
           {error}
         </div>
       )}
 
+      {/* Step 1: Admin Account */}
       {step === 1 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">
-            Cuenta de Administrador
-          </h3>
-          <p className="text-sm text-slate-500 mb-4">
-            Crea la cuenta de administrador principal del sistema.
-          </p>
-
+          <h3 className="text-lg font-semibold text-slate-900">Cuenta de Administrador</h3>
+          <p className="text-sm text-slate-500">Crea la cuenta principal del sistema.</p>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Nombre Completo
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre completo</label>
             <input
               type="text"
-              value={nombreCompleto}
-              onChange={(e) => setNombreCompleto(e.target.value)}
-              placeholder="Nombre del administrador"
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              value={formData.nombre_completo}
+              onChange={(e) => updateField('nombre_completo', e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="Juan Pérez"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Correo Electrónico
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Correo electrónico</label>
             <input
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@ejemplo.com"
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              value={formData.email}
+              onChange={(e) => updateField('email', e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="admin@ferreteria.com"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Contraseña
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
             <input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              value={formData.password}
+              onChange={(e) => updateField('password', e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="••••••••"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Confirmar Contraseña
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Confirmar contraseña</label>
             <input
               type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Repite la contraseña"
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              value={formData.confirm_password}
+              onChange={(e) => updateField('confirm_password', e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="••••••••"
             />
           </div>
         </div>
       )}
 
+      {/* Step 2: Business Info */}
       {step === 2 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">
-            Datos del Negocio
-          </h3>
-          <p className="text-sm text-slate-500 mb-4">
-            Ingresa la información de tu establecimiento.
-          </p>
-
+          <h3 className="text-lg font-semibold text-slate-900">Datos del Negocio</h3>
+          <p className="text-sm text-slate-500">Configura los datos básicos de tu ferretería.</p>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Nombre del Negocio
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del negocio</label>
             <input
               type="text"
-              value={negocioNombre}
-              onChange={(e) => setNegocioNombre(e.target.value)}
-              placeholder="Ferretería Ejemplo"
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              value={formData.negocio_nombre}
+              onChange={(e) => updateField('negocio_nombre', e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="Ferretería El Clavo"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Dirección
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Dirección</label>
             <input
               type="text"
-              value={negocioDireccion}
-              onChange={(e) => setNegocioDireccion(e.target.value)}
-              placeholder="Calle, número, colonia, ciudad"
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              value={formData.negocio_direccion}
+              onChange={(e) => updateField('negocio_direccion', e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="Calle Principal #123, Centro"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              RFC
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">RFC</label>
             <input
               type="text"
-              value={negocioRfc}
-              onChange={(e) => setNegocioRfc(e.target.value)}
-              placeholder="RFC del negocio"
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              value={formData.negocio_rfc}
+              onChange={(e) => updateField('negocio_rfc', e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="ABC123456XYZ"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Teléfono <span className="text-slate-400">(opcional)</span>
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono (opcional)</label>
             <input
               type="text"
-              value={negocioTelefono}
-              onChange={(e) => setNegocioTelefono(e.target.value)}
-              placeholder="Teléfono de contacto"
-              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              value={formData.negocio_telefono}
+              onChange={(e) => updateField('negocio_telefono', e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="555-123-4567"
             />
           </div>
         </div>
       )}
 
+      {/* Step 3: Summary */}
       {step === 3 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">
-            Resumen de Configuración
-          </h3>
-          <p className="text-sm text-slate-500 mb-4">
-            Revisa la información antes de finalizar.
-          </p>
-
+          <h3 className="text-lg font-semibold text-slate-900">Resumen</h3>
+          <p className="text-sm text-slate-500">Revisa la información antes de finalizar.</p>
           <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
             <div>
-              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Administrador
-              </h4>
-              <p className="text-sm text-slate-900 mt-1">{nombreCompleto}</p>
-              <p className="text-sm text-slate-500">{email}</p>
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Administrador</h4>
+              <p className="text-sm text-slate-900 mt-1">{formData.nombre_completo}</p>
+              <p className="text-sm text-slate-600">{formData.email}</p>
             </div>
             <div className="border-t border-slate-200 pt-3">
-              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Negocio
-              </h4>
-              <p className="text-sm text-slate-900 mt-1">{negocioNombre}</p>
-              <p className="text-sm text-slate-500">{negocioDireccion}</p>
-              <p className="text-sm text-slate-500">RFC: {negocioRfc}</p>
-              {negocioTelefono && (
-                <p className="text-sm text-slate-500">Tel: {negocioTelefono}</p>
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Negocio</h4>
+              <p className="text-sm text-slate-900 mt-1">{formData.negocio_nombre}</p>
+              <p className="text-sm text-slate-600">{formData.negocio_direccion}</p>
+              <p className="text-sm text-slate-600">RFC: {formData.negocio_rfc}</p>
+              {formData.negocio_telefono && (
+                <p className="text-sm text-slate-600">Tel: {formData.negocio_telefono}</p>
               )}
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex justify-between mt-8">
-        {step > 1 && step <= 3 ? (
+      {/* Navigation buttons */}
+      <div className="flex justify-between pt-4">
+        {step > 1 ? (
           <button
             type="button"
-            onClick={() => {
-              setStep(step - 1);
-              setError('');
-            }}
-            className="px-6 py-2.5 border border-slate-300 text-slate-700 rounded-2xl hover:bg-slate-50 transition-all text-sm font-medium"
+            onClick={handleBack}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-300 rounded-2xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all"
           >
-            Anterior
+            <ChevronLeft className="w-4 h-4" />
+            Atrás
           </button>
         ) : (
           <div />
         )}
-
         {step < 3 ? (
           <button
             type="button"
             onClick={handleNext}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 transition-all text-sm font-medium"
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 transition-all text-sm font-medium"
           >
             Siguiente
+            <ChevronRight className="w-4 h-4" />
           </button>
         ) : (
           <button
             type="button"
             onClick={handleSubmit}
             disabled={isLoading}
-            className="px-6 py-2.5 bg-green-600 text-white rounded-2xl shadow-sm hover:bg-green-700 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-2xl shadow-sm hover:bg-green-700 disabled:opacity-50 transition-all text-sm font-medium"
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Guardando...
-              </>
-            ) : (
-              'Finalizar Configuración'
-            )}
+            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isLoading ? 'Guardando...' : 'Finalizar configuración'}
           </button>
         )}
       </div>

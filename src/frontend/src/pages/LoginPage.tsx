@@ -1,52 +1,50 @@
-import React, { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LoginForm } from '../components/auth/LoginForm';
 import { useAuth } from '../hooks/useAuth';
-import { LoadingState } from '../components/LoadingState';
-import { LogIn } from 'lucide-react';
+import { LoginForm } from '../components/auth/LoginForm';
+import { LoadingState } from '../components/ui/LoadingState';
+import { Store } from 'lucide-react';
 
 export function LoginPage() {
+  const { isAuthenticated, isLoading, checkSetup } = useAuth();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading, setupRequired } = useAuth();
+  const [checkingSetup, setCheckingSetup] = useState(true);
 
   useEffect(() => {
-    if (setupRequired) {
-      navigate('/setup-wizard', { replace: true });
-      return;
-    }
-    if (isAuthenticated) {
-      navigate('/', { replace: true });
-    }
-  }, [isAuthenticated, setupRequired, navigate]);
+    const check = async () => {
+      if (isLoading) return;
+      if (isAuthenticated) {
+        navigate('/', { replace: true });
+        return;
+      }
+      const needsSetup = await checkSetup();
+      if (needsSetup) {
+        navigate('/setup-wizard', { replace: true });
+        return;
+      }
+      setCheckingSetup(false);
+    };
+    check();
+  }, [isAuthenticated, isLoading, checkSetup, navigate]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <LoadingState message="Verificando sesión..." />
-      </div>
-    );
+  if (isLoading || checkingSetup) {
+    return <LoadingState message="Verificando sesión..." />;
   }
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-2xl mb-4">
-            <LogIn className="w-8 h-8 text-blue-600" />
+          <div className="bg-blue-600 rounded-2xl p-3 inline-flex mb-4 shadow-lg">
+            <Store className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Ferretería</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Inicia sesión para continuar
-          </p>
+          <p className="text-sm text-slate-500 mt-1">Inicia sesión para continuar</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <LoginForm onSuccess={() => navigate('/', { replace: true })} />
+          <LoginForm />
         </div>
-
-        <p className="text-center mt-6 text-xs text-slate-400">
-          &copy; {new Date().getFullYear()} Ferretería. Todos los derechos reservados.
-        </p>
       </div>
     </div>
   );

@@ -1,12 +1,14 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autenticacin_usuarios_y_configuracin_inicial.dependencies import (
-    get_current_user,
-    require_admin,
-)
-from autenticacin_usuarios_y_configuracin_inicial.models import Usuario
-from autenticacin_usuarios_y_configuracin_inicial.schemas import (
+from database import get_db
+
+from .dependencies import get_current_user, require_admin
+from .models import ConfiguracionNegocio, Rol, TokenRestablecimiento, Usuario
+from .schemas import (
     ChangePasswordRequest,
     ChangePasswordResponse,
     ForgotPasswordRequest,
@@ -29,471 +31,384 @@ from autenticacin_usuarios_y_configuracin_inicial.schemas import (
     UserUpdateRequest,
     VerifyTokenResponse,
 )
-from autenticacin_usuarios_y_configuracin_inicial.service import (
+from .service import (
     authenticate_user,
-    change_user_password,
+    change_password,
     check_setup_status,
     create_reset_token,
     create_session_token,
     create_usuario,
     deactivate_usuario,
-    ensure_roles_exist,
     get_preferencias,
     get_usuario_by_email,
     get_usuario_by_id,
-    invalidate_all_user_tokens,
     invalidate_token,
     list_usuarios,
     reactivate_usuario,
     reset_password,
     run_setup,
+    update_perfil,
     update_preferencias,
     update_usuario,
     verify_reset_token,
 )
-from database import get_db
+from .utils import hash_token
 
 router = APIRouter()
 
 
-# ───────────────────────────────────────────────────────
-# Endpoints Públicos — Setup Wizard
-# ───────────────────────────────────────────────────────
-
-@router.get("/auth/check-setup", response_model=SetupStatusResponse, tags=["Setup"])
-async def op_check_setup(db: AsyncSession = Depends(get_db)):
-    """Verifica si el setup inicial ha sido completado."""
-    try:
-        setup_completed, admin_exists = await check_setup_status(db)
-        return SetupStatusResponse(setup_completed=setup_completed, admin_exists=admin_exists)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# ═══════════════════════════════════════════════════════
+# ENDPOINTS PÚBLICOS (sin autenticación)
+# ═══════════════════════════════════════════════════════
 
 
-@router.post("/auth/setup", response_model=SetupResponse, status_code=201, tags=["Setup"])
-async def op_run_setup(data: SetupRequest, db: AsyncSession = Depends(get_db)):
-    """Ejecuta el asistente de configuración inicial (setup wizard)."""
-    try:
-        # Ensure roles exist
-        await ensure_roles_exist(db)
-
-        # Check if setup already completed
-        setup_completed, admin_exists = await check_setup_status(db)
-        if setup_completed or admin_exists:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="La configuración inicial ya ha sido completada",
-            )
-
-        # Check email uniqueness
-        existing = await get_usuario_by_email(db, data.email)
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="El correo electrónico ya está registrado",
-            )
-
-        usuario = await run_setup(db, data.model_dump())
-        return SetupResponse(mensaje="Configuración inicial completada exitosamente", usuario=UserOut.model_validate(usuario))
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/check-setup", response_model=SetupStatusResponse, tags=["Setup"])
+async def check_setup(db: AsyncSession = Depends(get_db)):
+    """Check if setup has been completed and if any admin exists."""
+    status_data = await check_setup_status(db)
+    return SetupStatusResponse(**status_data)
 
 
-# ───────────────────────────────────────────────────────
-# Endpoints Públicos — Autenticación
-# ───────────────────────────────────────────────────────
+@router.post("/setup", response_model=SetupResponse, tags=["Setup"])
+async def setup_initial(data: SetupRequest, db: AsyncSession = Depends(get_db)):
+    """Run the initial setup wizard."""
+    user = await run_setup(db, data.model_dump())
+    user_response = UserOut.model_validate(user)
+    return SetupResponse(mensaje="Configuración inicial completada exitosamente.", usuario=user_response)
 
-@router.post("/auth/login", response_model=LoginResponse, tags=["Auth"])
-async def op_login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Inicia sesión con credenciales (email + password)."""
-    try:
-        usuario = await authenticate_user(db, data.email, data.password)
-        if not usuario:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas",
-            )
 
-        token_str, expires_in = await create_session_token(db, usuario, remember=data.remember)
-
-        return LoginResponse(
-            token=token_str,
-            token_type="bearer",
-            expires_in=expires_in,
-            usuario=UserOut.model_validate(usuario),
+@router.post("/login", response_model=LoginResponse, tags=["Auth"])
+async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Authenticate user and return a session token."""
+    user = await authenticate_user(db, data.email, data.password)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas",
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    token, expires_in = await create_session_token(db, user.id, persistent=data.remember)
+    user_response = UserOut.model_validate(user)
+    return LoginResponse(token=token, token_type="bearer", expires_in=expires_in, usuario=user_response)
 
 
-@router.post("/auth/forgot-password", response_model=ForgotPasswordResponse, tags=["Auth"])
-async def op_forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
-    """Solicita un enlace de recuperación de contraseña."""
-    try:
-        token_str = await create_reset_token(db, data.email)
-        # Always return success to not reveal whether email exists
-        return ForgotPasswordResponse(
-            mensaje="Si el correo está registrado, recibirás un enlace de recuperación"
+@router.post("/forgot-password", response_model=ForgotPasswordResponse, tags=["Auth"])
+async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Request a password reset link sent to email."""
+    await create_reset_token(db, data.email)
+    # Always return success to not reveal whether email exists
+    return ForgotPasswordResponse(
+        mensaje="Si el correo está registrado, recibirás un enlace de restablecimiento."
+    )
+
+
+@router.get("/verify-reset-token/{token}", response_model=VerifyTokenResponse, tags=["Auth"])
+async def verify_reset_token_endpoint(token: str, db: AsyncSession = Depends(get_db)):
+    """Verify if a reset token is valid."""
+    result = await verify_reset_token(db, token)
+    if result is None:
+        # Check if token exists but is expired/used
+        token_hashed = hash_token(token)
+        existing = await db.execute(
+            select(TokenRestablecimiento).where(
+                TokenRestablecimiento.token_hash == token_hashed
+            )
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/auth/verify-reset-token/{token}", response_model=VerifyTokenResponse, tags=["Auth"])
-async def op_verify_reset_token(token: str, db: AsyncSession = Depends(get_db)):
-    """Verifica si un token de restablecimiento es válido."""
-    try:
-        email = await verify_reset_token(db, token)
-        if email is None:
+        record = existing.scalar_one_or_none()
+        if record is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Token no encontrado o expirado",
+                detail="Token no encontrado",
             )
-        return VerifyTokenResponse(valido=True, email=email)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Token expirado o ya utilizado",
+        )
+
+    return VerifyTokenResponse(valido=True, email=result["email"])
 
 
-@router.post("/auth/reset-password", response_model=ResetPasswordResponse, tags=["Auth"])
-async def op_reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
-    """Restablece la contraseña usando un token válido."""
-    try:
-        if data.new_password != data.confirm_password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Las contraseñas no coinciden",
-            )
+@router.post("/reset-password", response_model=ResetPasswordResponse, tags=["Auth"])
+async def reset_password_endpoint(data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Reset password using a valid token."""
+    if data.new_password != data.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Las contraseñas no coinciden",
+        )
 
-        success = await reset_password(db, data.token, data.new_password)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="Token inválido o expirado",
-            )
+    success = await reset_password(db, data.token, data.new_password)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Token inválido o expirado",
+        )
 
-        return ResetPasswordResponse(mensaje="Contraseña restablecida exitosamente")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return ResetPasswordResponse(mensaje="Contraseña restablecida exitosamente.")
 
 
-# ───────────────────────────────────────────────────────
-# Endpoints Protegidos — Perfil y Sesión
-# ───────────────────────────────────────────────────────
-
-@router.get("/auth/me", response_model=UserOut, tags=["Auth"])
-async def op_me(current_user: Usuario = Depends(get_current_user)):
-    """Obtiene los datos del usuario autenticado."""
-    try:
-        return UserOut.model_validate(current_user)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# ═══════════════════════════════════════════════════════
+# ENDPOINTS PROTEGIDOS (requieren autenticación)
+# ═══════════════════════════════════════════════════════
 
 
-@router.post("/auth/logout", response_model=LogoutResponse, tags=["Auth"])
-async def op_logout(
+@router.get("/me", response_model=UserOut, tags=["Auth"])
+async def get_me(current_user: Usuario = Depends(get_current_user)):
+    """Get the profile of the currently authenticated user."""
+    return UserOut.model_validate(current_user)
+
+
+@router.post("/logout", response_model=LogoutResponse, tags=["Auth"])
+async def logout(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Cierra la sesión del usuario autenticado invalidando todos sus tokens."""
-    try:
-        await invalidate_all_user_tokens(db, current_user.id)
-        return LogoutResponse(mensaje="Sesión cerrada exitosamente")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Logout the current user by invalidating their token."""
+    # The token is extracted via dependencies; we invalidate it via the dependency
+    # We use the get_current_user dependency which already validates the token
+    # For simplicity, we invalidate all tokens for the user
+    from .service import invalidar_tokens_usuario
+
+    await invalidar_tokens_usuario(db, current_user.id)
+    return LogoutResponse(mensaje="Sesión cerrada exitosamente.")
 
 
-# ───────────────────────────────────────────────────────
-# Endpoints Protegidos — Gestión de Usuarios (Admin)
-# ───────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════
+# ENDPOINTS DE ADMINISTRACIÓN DE USUARIOS
+# ═══════════════════════════════════════════════════════
+
 
 @router.get("/usuarios", response_model=PaginatedUsersResponse, tags=["Admin"])
-async def op_list_usuarios(
-    search: str = Query(None, description="Búsqueda por nombre o email"),
-    page: int = Query(1, ge=1, description="Número de página"),
-    page_size: int = Query(10, ge=1, le=100, description="Elementos por página"),
-    db: AsyncSession = Depends(get_db),
+async def list_usuarios_endpoint(
+    search: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     current_user: Usuario = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Lista todos los usuarios con paginación y búsqueda opcional."""
-    try:
-        usuarios, total = await list_usuarios(db, search=search, page=page, page_size=page_size)
-        total_pages = max(1, (total + page_size - 1) // page_size)
-        return PaginatedUsersResponse(
-            items=[UserOut.model_validate(u) for u in usuarios],
-            total=total,
-            page=page,
-            page_size=page_size,
-            total_pages=total_pages,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """List all users with pagination and optional search."""
+    result = await list_usuarios(db, search=search, page=page, page_size=page_size)
+    items = [UserOut.model_validate(u) for u in result["items"]]
+    return PaginatedUsersResponse(
+        items=items,
+        total=result["total"],
+        page=result["page"],
+        page_size=result["page_size"],
+        total_pages=result["total_pages"],
+    )
 
 
 @router.get("/usuarios/{usuario_id}", response_model=UserOut, tags=["Admin"])
-async def op_get_usuario(
+async def get_usuario_endpoint(
     usuario_id: int,
-    db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Obtiene los datos de un usuario por ID."""
-    try:
-        usuario = await get_usuario_by_id(db, usuario_id)
-        if not usuario:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado",
-            )
-        return UserOut.model_validate(usuario)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Get a single user by ID."""
+    user = await get_usuario_by_id(db, usuario_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+    return UserOut.model_validate(user)
 
 
-@router.post("/usuarios", response_model=UserOut, status_code=201, tags=["Admin"])
-async def op_create_usuario(
+@router.post("/usuarios", response_model=UserOut, tags=["Admin"])
+async def create_usuario_endpoint(
     data: UserCreateRequest,
-    db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Crea un nuevo usuario."""
-    try:
-        # Validate role
-        if data.rol not in ["administrador", "vendedor", "almacen"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Rol inválido. Los roles válidos son: administrador, vendedor, almacen",
-            )
+    """Create a new user."""
+    # Check email uniqueness
+    existing = await get_usuario_by_email(db, data.email)
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El correo electrónico ya está registrado",
+        )
 
-        # Check email uniqueness
-        existing = await get_usuario_by_email(db, data.email)
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="El correo electrónico ya está registrado",
-            )
+    # Validate role
+    valid_roles = ["administrador", "vendedor", "almacen"]
+    if data.rol not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Rol no válido. Roles disponibles: {valid_roles}",
+        )
 
-        usuario = await create_usuario(db, data.model_dump())
-        return UserOut.model_validate(usuario)
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    user = await create_usuario(db, data.model_dump())
+    return UserOut.model_validate(user)
 
 
 @router.put("/usuarios/{usuario_id}", response_model=UserOut, tags=["Admin"])
-async def op_update_usuario(
+async def update_usuario_endpoint(
     usuario_id: int,
     data: UserUpdateRequest,
-    db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Actualiza los datos de un usuario."""
-    try:
-        usuario = await get_usuario_by_id(db, usuario_id)
-        if not usuario:
+    """Update an existing user's data (name, email, role)."""
+    # Check email uniqueness if email is being changed
+    if data.email:
+        existing = await get_usuario_by_email(db, data.email)
+        if existing is not None and existing.id != usuario_id:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El correo electrónico ya está registrado por otro usuario",
             )
 
-        # Check email uniqueness if changing email
-        if data.email and data.email != usuario.email:
-            existing = await get_usuario_by_email(db, data.email)
-            if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="El correo electrónico ya está registrado",
-                )
-
-        # Validate role if provided
-        if data.rol and data.rol not in ["administrador", "vendedor", "almacen"]:
+    # Validate role if provided
+    if data.rol:
+        valid_roles = ["administrador", "vendedor", "almacen"]
+        if data.rol not in valid_roles:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Rol inválido. Los roles válidos son: administrador, vendedor, almacen",
+                detail=f"Rol no válido. Roles disponibles: {valid_roles}",
             )
 
-        usuario = await update_usuario(db, usuario, data.model_dump(exclude_unset=True))
-        return UserOut.model_validate(usuario)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    user = await update_usuario(db, usuario_id, data.model_dump(exclude_unset=True))
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+    return UserOut.model_validate(user)
 
 
 @router.patch("/usuarios/{usuario_id}/deactivate", response_model=UserActionResponse, tags=["Admin"])
-async def op_deactivate_usuario(
+async def deactivate_usuario_endpoint(
     usuario_id: int,
-    db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Desactiva un usuario (lo marca como inactivo e invalida sus tokens)."""
-    try:
-        if usuario_id == current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="No puedes desactivar tu propia cuenta",
-            )
-
-        usuario = await get_usuario_by_id(db, usuario_id)
-        if not usuario:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado",
-            )
-
-        usuario = await deactivate_usuario(db, usuario)
-        return UserActionResponse(
-            mensaje="Usuario desactivado exitosamente",
-            usuario=UserOut.model_validate(usuario),
+    """Deactivate a user. Cannot deactivate yourself."""
+    if usuario_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No puedes desactivar tu propia cuenta",
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    user = await deactivate_usuario(db, usuario_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+
+    return UserActionResponse(mensaje="Usuario desactivado exitosamente.", usuario=UserOut.model_validate(user))
 
 
 @router.patch("/usuarios/{usuario_id}/reactivate", response_model=UserActionResponse, tags=["Admin"])
-async def op_reactivate_usuario(
+async def reactivate_usuario_endpoint(
     usuario_id: int,
-    db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Reactivar un usuario."""
-    try:
-        usuario = await get_usuario_by_id(db, usuario_id)
-        if not usuario:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado",
-            )
-
-        usuario = await reactivate_usuario(db, usuario)
-        return UserActionResponse(
-            mensaje="Usuario reactivado exitosamente",
-            usuario=UserOut.model_validate(usuario),
+    """Reactivate a deactivated user."""
+    user = await reactivate_usuario(db, usuario_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return UserActionResponse(mensaje="Usuario reactivado exitosamente.", usuario=UserOut.model_validate(user))
 
 
-# ───────────────────────────────────────────────────────
-# Endpoints Protegidos — Perfil y Preferencias
-# ───────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════
+# ENDPOINTS DE PERFIL Y PREFERENCIAS
+# ═══════════════════════════════════════════════════════
 
-@router.get("/perfil", response_model=PerfilResponse, tags=["Perfil"])
-async def op_get_perfil(
+
+@router.get("/perfil", response_model=PerfilResponse, tags=["Auth"])
+async def get_perfil(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Obtiene el perfil completo del usuario autenticado (datos + preferencias)."""
-    try:
-        preferencias = await get_preferencias(db, current_user.id)
-        if not preferencias:
-            preferencias_data = PreferenciasOut()
-        else:
-            preferencias_data = PreferenciasOut.model_validate(preferencias)
-
-        return PerfilResponse(
-            usuario=UserOut.model_validate(current_user),
-            preferencias=preferencias_data,
+    """Get profile and preferences of the current user."""
+    user_response = UserOut.model_validate(current_user)
+    pref = await get_preferencias(db, current_user.id)
+    if pref is None:
+        pref_out = PreferenciasOut()
+    else:
+        pref_out = PreferenciasOut(
+            idioma=pref.idioma,
+            tema_visual=pref.tema_visual,
+            zona_horaria=pref.configuracion_regional,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return PerfilResponse(usuario=user_response, preferencias=pref_out)
 
 
-@router.put("/perfil", response_model=UserOut, tags=["Perfil"])
-async def op_update_perfil(
+@router.put("/perfil", response_model=UserOut, tags=["Auth"])
+async def update_perfil_endpoint(
     data: UserUpdateRequest,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Actualiza los datos del perfil del usuario autenticado."""
-    try:
-        # Check email uniqueness if changing email
-        if data.email and data.email != current_user.email:
-            existing = await get_usuario_by_email(db, data.email)
-            if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="El correo electrónico ya está registrado",
-                )
+    """Update current user's profile (name and email)."""
+    # Check email uniqueness
+    if data.email:
+        existing = await get_usuario_by_email(db, data.email)
+        if existing is not None and existing.id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="El correo electrónico ya está registrado por otro usuario",
+            )
 
-        usuario = await update_usuario(db, current_user, data.model_dump(exclude_unset=True))
-        return UserOut.model_validate(usuario)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    user = await update_perfil(db, current_user.id, data.model_dump(exclude_unset=True))
+    return UserOut.model_validate(user)
 
 
-@router.put("/perfil/cambiar-password", response_model=ChangePasswordResponse, tags=["Perfil"])
-async def op_change_password(
+@router.put("/perfil/cambiar-password", response_model=ChangePasswordResponse, tags=["Auth"])
+async def cambiar_password_endpoint(
     data: ChangePasswordRequest,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Cambia la contraseña del usuario autenticado."""
-    try:
-        # Validate passwords match
-        if data.new_password != data.confirm_password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Las contraseñas nuevas no coinciden",
-            )
+    """Change the current user's password."""
+    if data.new_password != data.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Las contraseñas nuevas no coinciden",
+        )
 
-        success = await change_user_password(db, current_user, data.current_password, data.new_password)
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La contraseña actual es incorrecta",
-            )
+    success = await change_password(db, current_user.id, data.current_password, data.new_password)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual es incorrecta",
+        )
 
-        return ChangePasswordResponse(mensaje="Contraseña cambiada exitosamente")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return ChangePasswordResponse(mensaje="Contraseña cambiada exitosamente.")
 
 
-@router.get("/perfil/preferencias", response_model=PreferenciasOut, tags=["Perfil"])
-async def op_get_preferencias(
+@router.get("/perfil/preferencias", response_model=PreferenciasOut, tags=["Auth"])
+async def get_preferencias_endpoint(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Obtiene las preferencias del usuario autenticado."""
-    try:
-        preferencias = await get_preferencias(db, current_user.id)
-        if not preferencias:
-            return PreferenciasOut()
-        return PreferenciasOut.model_validate(preferencias)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Get the current user's preferences."""
+    pref = await get_preferencias(db, current_user.id)
+    if pref is None:
+        return PreferenciasOut()
+    return PreferenciasOut(
+        idioma=pref.idioma,
+        tema_visual=pref.tema_visual,
+        zona_horaria=pref.configuracion_regional,
+    )
 
 
-@router.put("/perfil/preferencias", response_model=PreferenciasOut, tags=["Perfil"])
-async def op_update_preferencias(
+@router.put("/perfil/preferencias", response_model=PreferenciasOut, tags=["Auth"])
+async def update_preferencias_endpoint(
     data: PreferenciasUpdateRequest,
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Actualiza las preferencias del usuario autenticado."""
-    try:
-        preferencias = await update_preferencias(db, current_user.id, data.model_dump(exclude_unset=True))
-        return PreferenciasOut.model_validate(preferencias)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Update the current user's preferences."""
+    pref = await update_preferencias(db, current_user.id, data.model_dump(exclude_unset=True))
+    return PreferenciasOut(
+        idioma=pref.idioma,
+        tema_visual=pref.tema_visual,
+        zona_horaria=pref.configuracion_regional,
+    )

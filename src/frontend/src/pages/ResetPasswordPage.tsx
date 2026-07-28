@@ -1,99 +1,87 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Store, AlertCircle } from 'lucide-react';
 import ResetPasswordForm from '../components/auth/ResetPasswordForm';
-import { verifyResetToken } from '../services/api';
-import { Store, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import * as api from '../services/api';
 
 export default function ResetPasswordPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get('token') || '';
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token') ?? '';
 
   const [isVerifying, setIsVerifying] = useState(true);
-  const [tokenValido, setTokenValido] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      setError('Token no proporcionado');
-      setIsVerifying(false);
-      return;
+    async function verify() {
+      if (!token) {
+        setError('Token no proporcionado.');
+        setIsVerifying(false);
+        return;
+      }
+      try {
+        await api.verifyResetToken(token);
+        setIsVerifying(false);
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : 'Token inválido o expirado.';
+        setError(message);
+        setIsVerifying(false);
+      }
     }
-
-    verifyResetToken(token)
-      .then((res) => {
-        if (res.valido) {
-          setTokenValido(true);
-        } else {
-          setError('El token no es válido');
-        }
-      })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : 'Token inválido o expirado';
-        setError(msg);
-      })
-      .finally(() => setIsVerifying(false));
+    verify();
   }, [token]);
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-900 text-white mb-4">
-            <Store className="w-8 h-8" />
+  function handleSuccess() {
+    navigate('/login', { replace: true });
+  }
+
+  if (isVerifying) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-sm p-8 text-center space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-slate-900">
+              Enlace Inválido
+            </h2>
+            <p className="text-slate-600">{error}</p>
+            <button
+              onClick={() => navigate('/forgot-password')}
+              className="px-6 py-3 rounded-2xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all"
+            >
+              Solicitar nuevo enlace
+            </button>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Ferretería</h1>
-          <p className="text-sm text-slate-500 mt-1">Restablecer contraseña</p>
         </div>
+      </div>
+    );
+  }
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          {isVerifying && (
-            <div className="flex flex-col items-center gap-3 py-4">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-900" />
-              <p className="text-sm text-slate-500">Verificando token...</p>
-            </div>
-          )}
-
-          {!isVerifying && error && !tokenValido && (
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100">
-                <XCircle className="w-6 h-6 text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Token inválido</h3>
-                <p className="text-sm text-slate-500 mt-1">{error}</p>
-              </div>
-            </div>
-          )}
-
-          {!isVerifying && success && (
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Contraseña actualizada</h3>
-                <p className="text-sm text-slate-500 mt-1">
-                  Tu contraseña se ha restablecido exitosamente.
-                </p>
-              </div>
-              <button
-                onClick={() => navigate('/login')}
-                className="py-2.5 px-6 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-all"
-              >
-                Ir al inicio de sesión
-              </button>
-            </div>
-          )}
-
-          {!isVerifying && tokenValido && !success && (
-            <ResetPasswordForm
-              token={token}
-              onSuccess={() => setSuccess(true)}
-            />
-          )}
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-md mb-8 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center mx-auto mb-4">
+          <Store className="w-8 h-8 text-white" />
         </div>
+        <h1 className="text-3xl font-bold text-slate-900">Ferretería</h1>
+        <p className="text-slate-500 mt-2">
+          Restablecer contraseña
+        </p>
+      </div>
+
+      <div className="w-full bg-white rounded-2xl shadow-sm p-8">
+        <ResetPasswordForm token={token} onSuccess={handleSuccess} />
       </div>
     </div>
   );

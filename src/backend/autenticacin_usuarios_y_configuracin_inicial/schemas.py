@@ -1,13 +1,10 @@
 from datetime import datetime
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator
+from typing import Optional, List
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 
-# ─── Roles predefinidos ─────────────────────────────────────
-ROLES_PERMITIDOS = {"administrador", "vendedor", "almacen"}
+# ─── Usuario ─────────────────────────────────────────────────────────────────
 
-
-# ─── Esquemas de Usuario ────────────────────────────────────
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -28,35 +25,20 @@ class UserOut(BaseModel):
 
 
 class UserCreateRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1, max_length=150)
+    nombre_completo: str
     email: EmailStr
-    password: str = Field(..., min_length=6)
+    password: str
     rol: str
-
-    @field_validator("rol")
-    @classmethod
-    def validate_rol(cls, v):
-        if v.lower() not in ROLES_PERMITIDOS:
-            raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(sorted(ROLES_PERMITIDOS))}")
-        return v.lower()
 
 
 class UserUpdateRequest(BaseModel):
-    nombre_completo: Optional[str] = Field(None, min_length=1, max_length=150)
+    nombre_completo: Optional[str] = None
     email: Optional[EmailStr] = None
     rol: Optional[str] = None
 
-    @field_validator("rol")
-    @classmethod
-    def validate_rol(cls, v):
-        if v is not None:
-            if v.lower() not in ROLES_PERMITIDOS:
-                raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(sorted(ROLES_PERMITIDOS))}")
-            return v.lower()
-        return v
 
+# ─── Autenticación ───────────────────────────────────────────────────────────
 
-# ─── Esquemas de Autenticación ──────────────────────────────
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -70,14 +52,15 @@ class LoginResponse(BaseModel):
     usuario: UserOut
 
 
-# ─── Esquemas de Setup ──────────────────────────────────────
+# ─── Setup ───────────────────────────────────────────────────────────────────
+
 class SetupRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1, max_length=150)
+    nombre_completo: str
     email: EmailStr
-    password: str = Field(..., min_length=6)
-    negocio_nombre: str = Field(..., min_length=1)
-    negocio_direccion: str = Field(..., min_length=1)
-    negocio_rfc: str = Field(..., min_length=1)
+    password: str
+    negocio_nombre: str
+    negocio_direccion: str
+    negocio_rfc: str
     negocio_telefono: Optional[str] = None
 
 
@@ -91,22 +74,24 @@ class SetupStatusResponse(BaseModel):
     admin_exists: bool
 
 
-# ─── Esquemas de Preferencias ───────────────────────────────
+# ─── Preferencias ────────────────────────────────────────────────────────────
+
 class PreferenciasOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     idioma: str = "es"
     tema_visual: str = "light"
-    configuracion_regional: str = "es-MX"
+    zona_horaria: str = "America/Mexico_City"
 
 
 class PreferenciasUpdateRequest(BaseModel):
     idioma: Optional[str] = None
     tema_visual: Optional[str] = None
-    configuracion_regional: Optional[str] = None
+    zona_horaria: Optional[str] = None
 
 
-# ─── Esquemas de Recuperación ───────────────────────────────
+# ─── Recuperación de Contraseña ──────────────────────────────────────────────
+
 class ForgotPasswordRequest(BaseModel):
     email: str
 
@@ -122,7 +107,7 @@ class VerifyTokenResponse(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=6)
+    new_password: str
     confirm_password: str
 
 
@@ -132,7 +117,7 @@ class ResetPasswordResponse(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=6)
+    new_password: str
     confirm_password: str
 
 
@@ -140,7 +125,8 @@ class ChangePasswordResponse(BaseModel):
     mensaje: str
 
 
-# ─── Esquemas de Respuesta Genéricos ────────────────────────
+# ─── Respuestas Genéricas ────────────────────────────────────────────────────
+
 class PaginatedUsersResponse(BaseModel):
     items: List[UserOut]
     total: int
@@ -154,10 +140,10 @@ class UserActionResponse(BaseModel):
     usuario: UserOut
 
 
+class LogoutResponse(BaseModel):
+    mensaje: str
+
+
 class PerfilResponse(BaseModel):
     usuario: UserOut
     preferencias: PreferenciasOut
-
-
-class LogoutResponse(BaseModel):
-    mensaje: str

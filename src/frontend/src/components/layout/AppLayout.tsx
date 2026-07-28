@@ -7,7 +7,7 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="flex min-h-screen bg-slate-50">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -18,7 +18,7 @@ export default function AppLayout() {
 
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-30 transform transition-transform duration-200 lg:relative lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-30 transform transition-transform duration-200 ease-in-out lg:relative lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -27,8 +27,12 @@ export default function AppLayout() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <Navbar sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen((p) => !p)} />
-        <main className="flex-1 p-6 overflow-auto">
+        <Navbar
+          sidebarOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          title="Ferretería"
+        />
+        <main className="flex-1 p-6">
           <Outlet />
         </main>
       </div>

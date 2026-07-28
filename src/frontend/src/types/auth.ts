@@ -8,19 +8,6 @@ export interface UserOut {
   ultimo_acceso: string | null;
 }
 
-export interface UserCreateRequest {
-  nombre_completo: string;
-  email: string;
-  password: string;
-  rol: string;
-}
-
-export interface UserUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-  rol?: string;
-}
-
 export interface LoginRequest {
   email: string;
   password: string;
@@ -41,7 +28,7 @@ export interface SetupRequest {
   negocio_nombre: string;
   negocio_direccion: string;
   negocio_rfc: string;
-  negocio_telefono?: string;
+  negocio_telefono?: string | null;
 }
 
 export interface SetupResponse {
@@ -62,6 +49,11 @@ export interface ForgotPasswordResponse {
   mensaje: string;
 }
 
+export interface VerifyTokenResponse {
+  valido: boolean;
+  email: string;
+}
+
 export interface ResetPasswordRequest {
   token: string;
   new_password: string;
@@ -72,9 +64,35 @@ export interface ResetPasswordResponse {
   mensaje: string;
 }
 
-export interface VerifyTokenResponse {
-  valido: boolean;
+export interface UserCreateRequest {
+  nombre_completo: string;
   email: string;
+  password: string;
+  rol: string;
+}
+
+export interface UserUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+  rol?: string;
+}
+
+export interface PaginatedUsersResponse {
+  items: UserOut[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface UserActionResponse {
+  mensaje: string;
+  usuario: UserOut;
+}
+
+export interface PerfilUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
 }
 
 export interface ChangePasswordRequest {
@@ -99,27 +117,9 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
-export interface PerfilUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-}
-
 export interface PerfilResponse {
   usuario: UserOut;
   preferencias: PreferenciasOut;
-}
-
-export interface PaginatedUsersResponse {
-  items: UserOut[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
-
-export interface UserActionResponse {
-  mensaje: string;
-  usuario: UserOut;
 }
 
 export interface LogoutResponse {

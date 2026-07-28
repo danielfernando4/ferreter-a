@@ -1,131 +1,178 @@
-import { useState } from 'react';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Save, AlertCircle } from 'lucide-react';
 import type { UserOut, UserCreateRequest, UserUpdateRequest } from '../../types/auth';
+import * as api from '../../services/api';
 
 interface UserFormProps {
-  initialData?: UserOut;
-  onSave: (data: UserCreateRequest | UserUpdateRequest) => Promise<void>;
+  initialData?: UserOut | null;
   mode: 'create' | 'edit';
+  onSave: () => void;
+  onCancel: () => void;
 }
 
-export default function UserForm({ initialData, onSave, mode }: UserFormProps) {
-  const [nombreCompleto, setNombreCompleto] = useState(initialData?.nombre_completo || '');
-  const [email, setEmail] = useState(initialData?.email || '');
+const roles = [
+  { value: 'administrador', label: 'Administrador' },
+  { value: 'vendedor', label: 'Vendedor' },
+  { value: 'almacen', label: 'Almacén' },
+];
+
+export default function UserForm({
+  initialData,
+  mode,
+  onSave,
+  onCancel,
+}: UserFormProps) {
+  const [nombreCompleto, setNombreCompleto] = useState(
+    initialData?.nombre_completo ?? ''
+  );
+  const [email, setEmail] = useState(initialData?.email ?? '');
   const [password, setPassword] = useState('');
-  const [rol, setRol] = useState(initialData?.rol || 'vendedor');
-  const [showPassword, setShowPassword] = useState(false);
+  const [rol, setRol] = useState(initialData?.rol ?? 'vendedor');
   const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState('');
+  const [errors, setErrors] = useState<string[]>([]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setErrors('');
+    setErrors([]);
 
-    if (!nombreCompleto.trim()) { setErrors('El nombre es obligatorio'); return; }
-    if (!email.trim()) { setErrors('El email es obligatorio'); return; }
-    if (mode === 'create' && !password) { setErrors('La contraseña es obligatoria'); return; }
-    if (mode === 'create' && password.length < 6) { setErrors('La contraseña debe tener al menos 6 caracteres'); return; }
+    const fieldErrors: string[] = [];
+    if (!nombreCompleto.trim()) fieldErrors.push('El nombre es obligatorio.');
+    if (!email.trim()) fieldErrors.push('El email es obligatorio.');
+    if (mode === 'create' && !password) fieldErrors.push('La contraseña es obligatoria.');
+    if (mode === 'create' && password.length < 6)
+      fieldErrors.push('La contraseña debe tener al menos 6 caracteres.');
+    if (!rol) fieldErrors.push('El rol es obligatorio.');
+
+    if (fieldErrors.length > 0) {
+      setErrors(fieldErrors);
+      return;
+    }
 
     setIsLoading(true);
     try {
       if (mode === 'create') {
-        await onSave({
+        const data: UserCreateRequest = {
           nombre_completo: nombreCompleto.trim(),
           email: email.trim(),
           password,
           rol,
-        } as UserCreateRequest);
-      } else {
+        };
+        await api.createUsuario(data);
+      } else if (initialData) {
         const data: UserUpdateRequest = {};
-        if (nombreCompleto !== initialData?.nombre_completo) data.nombre_completo = nombreCompleto.trim();
-        if (email !== initialData?.email) data.email = email.trim();
-        if (rol !== initialData?.rol) data.rol = rol;
-        await onSave(data);
+        if (nombreCompleto.trim() !== initialData.nombre_completo)
+          data.nombre_completo = nombreCompleto.trim();
+        if (email.trim() !== initialData.email) data.email = email.trim();
+        if (rol !== initialData.rol) data.rol = rol;
+        await api.updateUsuario(initialData.id, data);
       }
+      onSave();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al guardar';
-      setErrors(msg);
+      const message =
+        err instanceof Error ? err.message : 'Error al guardar el usuario';
+      setErrors([message]);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const inputClass = "w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all text-sm";
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
-      {errors && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
-          {errors}
+      {errors.length > 0 && (
+        <div className="space-y-1 p-4 rounded-2xl bg-red-50">
+          {errors.map((err, idx) => (
+            <div key={idx} className="flex items-center gap-2 text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{err}</span>
+            </div>
+          ))}
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre completo</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+          Nombre Completo *
+        </label>
         <input
           type="text"
           value={nombreCompleto}
           onChange={(e) => setNombreCompleto(e.target.value)}
-          className={inputClass}
+          required
           placeholder="Nombre del usuario"
+          className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">Correo electrónico</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+          Email *
+        </label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className={inputClass}
-          placeholder="usuario@ejemplo.com"
+          required
+          placeholder="usuario@correo.com"
+          className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
         />
       </div>
 
       {mode === 'create' && (
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Contraseña</label>
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={inputClass + ' pr-10'}
-              placeholder="Mínimo 6 caracteres"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((p) => !p)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              tabIndex={-1}
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Contraseña *
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            placeholder="Mínimo 6 caracteres"
+            className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">Rol</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+          Rol *
+        </label>
         <select
           value={rol}
           onChange={(e) => setRol(e.target.value)}
-          className={inputClass}
+          className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
         >
-          <option value="administrador">Administrador</option>
-          <option value="vendedor">Vendedor</option>
-          <option value="almacen">Almacén</option>
+          {roles.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
         </select>
       </div>
 
-      <div className="pt-2">
+      <div className="flex gap-3 pt-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isLoading}
+          className="flex-1 px-4 py-3 rounded-2xl border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 disabled:opacity-50 transition-all"
+        >
+          Cancelar
+        </button>
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-2.5 px-4 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
-          {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-          {isLoading ? 'Guardando...' : mode === 'create' ? 'Crear usuario' : 'Guardar cambios'}
+          {isLoading ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+          ) : (
+            <>
+              <Save className="w-5 h-5" />
+              {mode === 'create' ? 'Crear Usuario' : 'Guardar Cambios'}
+            </>
+          )}
         </button>
       </div>
     </form>

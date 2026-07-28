@@ -1,19 +1,26 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AppLayout } from '../components/layout/AppLayout';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
-export function HomePage() {
-  const navigate = useNavigate();
+export default function HomePage() {
+  const { isAuthenticated, isLoading, user } = useAuth();
 
-  useEffect(() => {
-    navigate('/usuarios', { replace: true });
-  }, [navigate]);
-
-  return (
-    <AppLayout title="Dashboard">
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
       </div>
-    </AppLayout>
-  );
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Redirect based on role
+  if (user?.rol === 'administrador') {
+    return <Navigate to="/usuarios" replace />;
+  }
+
+  // Default redirect
+  return <Navigate to="/perfil" replace />;
 }

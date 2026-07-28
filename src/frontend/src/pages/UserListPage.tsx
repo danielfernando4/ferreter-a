@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { Plus, AlertCircle } from 'lucide-react';
 import UserTable from '../components/users/UserTable';
 import SearchInput from '../components/users/SearchInput';
 import Pagination from '../components/users/Pagination';
 import DeactivateConfirmModal from '../components/users/DeactivateConfirmModal';
-import { listUsuarios, deactivateUsuario } from '../services/api';
-import { Plus, Loader2, AlertCircle, Users } from 'lucide-react';
+import * as api from '../services/api';
 import type { UserOut } from '../types/auth';
 
 export default function UserListPage() {
@@ -19,18 +19,21 @@ export default function UserListPage() {
   const [error, setError] = useState('');
   const [deactivateTarget, setDeactivateTarget] = useState<UserOut | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [reactivateTarget, setReactivateTarget] = useState<UserOut | null>(null);
+  const [isReactivating, setIsReactivating] = useState(false);
 
   const fetchUsuarios = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
-      const res = await listUsuarios({ search: search || undefined, page, page_size: 10 });
-      setUsuarios(res.items);
-      setTotalPages(res.total_pages);
-      setTotal(res.total);
+      const result = await api.listUsuarios(search || undefined, page, 10);
+      setUsuarios(result.items);
+      setTotalPages(result.total_pages);
+      setTotal(result.total);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al cargar usuarios';
-      setError(msg);
+      const message =
+        err instanceof Error ? err.message : 'Error al cargar usuarios';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -43,94 +46,109 @@ export default function UserListPage() {
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (search) setPage(1);
-    }, 300);
+      if (page !== 1) setPage(1);
+      else fetchUsuarios();
+    }, 400);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const handleDeactivate = async () => {
+  async function handleDeactivate() {
     if (!deactivateTarget) return;
     setIsDeactivating(true);
     try {
-      await deactivateUsuario(deactivateTarget.id);
+      await api.deactivateUsuario(deactivateTarget.id);
       setDeactivateTarget(null);
       fetchUsuarios();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al desactivar usuario';
-      setError(msg);
+      const message =
+        err instanceof Error ? err.message : 'Error al desactivar usuario';
+      setError(message);
     } finally {
       setIsDeactivating(false);
     }
-  };
+  }
+
+  async function handleReactivate(user: UserOut) {
+    setReactivateTarget(user);
+    setIsReactivating(true);
+    try {
+      await api.reactivateUsuario(user.id);
+      setReactivateTarget(null);
+      fetchUsuarios();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Error al reactivar usuario';
+      setError(message);
+    } finally {
+      setIsReactivating(false);
+    }
+  }
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Usuarios</h1>
-          <p className="text-sm text-slate-500 mt-1">Gestiona los usuarios del sistema</p>
+          <h2 className="text-2xl font-bold text-slate-900">Usuarios</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            {total} usuario{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''}
+          </p>
         </div>
-        <Link
-          to="/usuarios/nuevo"
-          className="inline-flex items-center gap-2 py-2.5 px-4 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-all"
+        <button
+          onClick={() => navigate('/usuarios/nuevo')}
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all"
         >
-          <Plus className="w-4 h-4" />
-          Nuevo usuario
-        </Link>
-      </div>
-
-      <div className="mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar usuarios..." />
+          <Plus className="w-5 h-5" />
+          Nuevo Usuario
+        </button>
       </div>
 
       {error && (
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2 mb-4">
-          <AlertCircle className="w-4 h-4" />
-          {error}
+        <div className="flex items-center gap-2 p-4 rounded-2xl bg-red-50 text-red-700 text-sm">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
+      <SearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Buscar por nombre o email..."
+      />
+
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-900" />
-        </div>
-      ) : usuarios.length === 0 && !error ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-4">
-            <Users className="w-6 h-6 text-slate-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-slate-900 mb-1">No hay usuarios</h3>
-          <p className="text-sm text-slate-500 mb-4">Aún no se han registrado usuarios en el sistema.</p>
-          <Link
-            to="/usuarios/nuevo"
-            className="inline-flex items-center gap-2 py-2.5 px-4 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Crear primer usuario
-          </Link>
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
-            <div className="px-4 py-3 border-b border-slate-100 text-sm text-slate-500">
-              {total} usuario{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}
-            </div>
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <UserTable
               usuarios={usuarios}
               onEdit={(user) => navigate(`/usuarios/${user.id}/editar`)}
               onDeactivate={setDeactivateTarget}
+              onReactivate={handleReactivate}
             />
           </div>
-          <div className="mt-4">
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={setPage}
-            />
-          </div>
+
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
         </>
       )}
 
+      {/* Reactivate loading state */}
+      {reactivateTarget && isReactivating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30" />
+          <div className="relative bg-white rounded-2xl p-6">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto" />
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate modal */}
       {deactivateTarget && (
         <DeactivateConfirmModal
           userName={deactivateTarget.nombre_completo}

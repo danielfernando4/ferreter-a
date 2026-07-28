@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { forgotPassword } from '../../services/api';
+import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { Mail, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
+import * as api from '../../services/api';
 
 interface ForgotPasswordFormProps {
   onSuccess: () => void;
@@ -11,62 +11,101 @@ export default function ForgotPasswordForm({ onSuccess }: ForgotPasswordFormProp
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!email.trim()) {
-      setError('Ingresa tu correo electrónico');
-      return;
-    }
-    setIsLoading(true);
     setError('');
+    setIsLoading(true);
     try {
-      await forgotPassword({ email: email.trim() });
+      await api.forgotPassword({ email });
+      setSent(true);
       onSuccess();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al procesar la solicitud';
-      setError(msg);
+      const message =
+        err instanceof Error ? err.message : 'Error al procesar la solicitud';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }
+
+  if (sent) {
+    return (
+      <div className="text-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center mx-auto">
+          <CheckCircle className="w-8 h-8 text-green-600" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-900">Correo Enviado</h2>
+        <p className="text-slate-600">
+          Si el correo ingresado está registrado, recibirás un enlace para restablecer tu contraseña.
+        </p>
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Volver al inicio de sesión
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
-          {error}
+        <div className="flex items-center gap-2 p-4 rounded-2xl bg-red-50 text-red-700 text-sm">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
+      <p className="text-sm text-slate-600">
+        Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
+      </p>
+
       <div>
-        <label htmlFor="reset-email" className="block text-sm font-medium text-slate-700 mb-1.5">
-          Correo electrónico
+        <label
+          htmlFor="forgot-email"
+          className="block text-sm font-medium text-slate-700 mb-1.5"
+        >
+          Correo Electrónico
         </label>
         <input
-          id="reset-email"
+          id="forgot-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="correo@ejemplo.com"
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all text-sm"
+          required
+          placeholder="tu@correo.com"
+          className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 px-4 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+        className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-        {isLoading ? 'Enviando...' : 'Enviar enlace de recuperación'}
+        {isLoading ? (
+          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+        ) : (
+          <>
+            <Mail className="w-5 h-5" />
+            Enviar Enlace
+          </>
+        )}
       </button>
 
-      <p className="text-center text-sm text-slate-500">
-        <Link to="/login" className="text-slate-900 font-medium hover:underline">
+      <div className="text-center">
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="w-4 h-4" />
           Volver al inicio de sesión
         </Link>
-      </p>
+      </div>
     </form>
   );
 }

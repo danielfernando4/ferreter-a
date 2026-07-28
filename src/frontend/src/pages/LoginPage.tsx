@@ -1,37 +1,37 @@
-import { useNavigate, Link } from 'react-router-dom';
-import LoginForm from '../components/auth/LoginForm';
+import { useNavigate } from 'react-router-dom';
 import { Store } from 'lucide-react';
+import LoginForm from '../components/auth/LoginForm';
+import { useAuth } from '../hooks/useAuth';
+import { useEffect } from 'react';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
-  const handleSuccess = () => {
-    navigate('/');
-  };
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/usuarios', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  function handleSuccess() {
+    navigate('/usuarios', { replace: true });
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-slate-900 text-white mb-4">
-            <Store className="w-8 h-8" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">Ferretería</h1>
-          <p className="text-sm text-slate-500 mt-1">Inicia sesión para continuar</p>
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-md mb-8 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center mx-auto mb-4">
+          <Store className="w-8 h-8 text-white" />
         </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <LoginForm onSuccess={handleSuccess} />
-        </div>
-
-        <p className="text-center mt-4">
-          <Link
-            to="/forgot-password"
-            className="text-sm text-slate-600 hover:text-slate-900 font-medium"
-          >
-            ¿Olvidaste tu contraseña?
-          </Link>
+        <h1 className="text-3xl font-bold text-slate-900">Ferretería</h1>
+        <p className="text-slate-500 mt-2">
+          Inicia sesión para continuar
         </p>
+      </div>
+
+      <div className="w-full bg-white rounded-2xl shadow-sm p-8">
+        <LoginForm onSuccess={handleSuccess} />
       </div>
     </div>
   );

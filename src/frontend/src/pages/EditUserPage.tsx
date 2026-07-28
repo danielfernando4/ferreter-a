@@ -1,71 +1,92 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, AlertCircle } from 'lucide-react';
 import UserForm from '../components/users/UserForm';
-import { getUsuario, updateUsuario } from '../services/api';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import * as api from '../services/api';
 import type { UserOut } from '../types/auth';
 
 export default function EditUserPage() {
-  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
   const [user, setUser] = useState<UserOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!id) return;
-    getUsuario(Number(id))
-      .then(setUser)
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : 'Error al cargar usuario';
-        setError(msg);
-      })
-      .finally(() => setIsLoading(false));
+    async function loadUser() {
+      if (!id) return;
+      setIsLoading(true);
+      setError('');
+      try {
+        const data = await api.getUsuario(Number(id));
+        setUser(data);
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : 'Error al cargar usuario';
+        setError(message);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadUser();
   }, [id]);
 
-  const handleSave = async (data: Parameters<typeof updateUsuario>[1]) => {
-    await updateUsuario(Number(id), data);
+  function handleSave() {
     navigate('/usuarios');
-  };
+  }
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-900" />
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
       </div>
     );
   }
 
   if (error || !user) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <div className="p-6 rounded-2xl bg-red-50 border border-red-200 text-sm text-red-700">
-          {error || 'Usuario no encontrado'}
-        </div>
-        <Link to="/usuarios" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mt-4">
+      <div className="space-y-6">
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
+        >
           <ArrowLeft className="w-4 h-4" />
           Volver a usuarios
-        </Link>
+        </button>
+        <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-red-600" />
+          </div>
+          <p className="text-slate-600">{error || 'Usuario no encontrado'}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <Link
-          to="/usuarios"
-          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-4 transition-all"
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="p-2 rounded-2xl text-slate-600 hover:bg-slate-100 transition-all"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Volver a usuarios
-        </Link>
-        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
-        <p className="text-sm text-slate-500 mt-1">Modifica los datos del usuario</p>
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Editar Usuario</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Editando a {user.nombre_completo}
+          </p>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <UserForm initialData={user} mode="edit" onSave={handleSave} />
+      <div className="bg-white rounded-2xl shadow-sm p-8">
+        <UserForm
+          initialData={user}
+          mode="edit"
+          onSave={handleSave}
+          onCancel={() => navigate('/usuarios')}
+        />
       </div>
     </div>
   );

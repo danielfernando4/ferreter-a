@@ -1,10 +1,22 @@
-import { useState } from 'react';
-import { Loader2, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-import { runSetup } from '../../services/api';
-import type { SetupRequest } from '../../types/auth';
+import { useState, type FormEvent } from 'react';
+import { Store, User, Check, ArrowLeft, ArrowRight, AlertCircle } from 'lucide-react';
+import * as api from '../../services/api';
 
 interface SetupWizardFormProps {
   onComplete: () => void;
+}
+
+interface FormData {
+  // Step 1 - Admin account
+  nombre_completo: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  // Step 2 - Business data
+  negocio_nombre: string;
+  negocio_direccion: string;
+  negocio_rfc: string;
+  negocio_telefono: string;
 }
 
 export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
@@ -12,88 +24,106 @@ export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [formData, setFormData] = useState<SetupRequest>({
+  const [formData, setFormData] = useState<FormData>({
     nombre_completo: '',
     email: '',
     password: '',
+    confirmPassword: '',
     negocio_nombre: '',
     negocio_direccion: '',
     negocio_rfc: '',
     negocio_telefono: '',
   });
 
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  const updateField = (field: keyof SetupRequest, value: string) => {
+  function updateField(field: keyof FormData, value: string) {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  }
 
-  const validateStep1 = () => {
-    if (!formData.nombre_completo.trim()) return 'El nombre completo es obligatorio';
-    if (!formData.email.trim()) return 'El correo electrónico es obligatorio';
-    if (!formData.password) return 'La contraseña es obligatoria';
-    if (formData.password.length < 6) return 'La contraseña debe tener al menos 6 caracteres';
-    if (formData.password !== confirmPassword) return 'Las contraseñas no coinciden';
-    return null;
-  };
-
-  const validateStep2 = () => {
-    if (!formData.negocio_nombre.trim()) return 'El nombre del negocio es obligatorio';
-    if (!formData.negocio_direccion.trim()) return 'La dirección es obligatoria';
-    if (!formData.negocio_rfc.trim()) return 'El RFC es obligatorio';
-    return null;
-  };
-
-  const handleNext = () => {
-    setError('');
+  function isStepValid(): boolean {
     if (step === 1) {
-      const err = validateStep1();
-      if (err) { setError(err); return; }
+      return (
+        formData.nombre_completo.trim() !== '' &&
+        formData.email.trim() !== '' &&
+        formData.password.length >= 6 &&
+        formData.password === formData.confirmPassword
+      );
     }
     if (step === 2) {
-      const err = validateStep2();
-      if (err) { setError(err); return; }
+      return (
+        formData.negocio_nombre.trim() !== '' &&
+        formData.negocio_direccion.trim() !== '' &&
+        formData.negocio_rfc.trim() !== ''
+      );
     }
-    setStep((s) => s + 1);
-  };
+    return true;
+  }
 
-  const handleSubmit = async () => {
-    setIsLoading(true);
+  function nextStep() {
+    if (isStepValid()) {
+      setError('');
+      setStep((s) => s + 1);
+    } else {
+      setError('Por favor completa todos los campos obligatorios.');
+    }
+  }
+
+  function prevStep() {
     setError('');
+    setStep((s) => s - 1);
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
     try {
-      await runSetup(formData);
+      await api.runSetup({
+        nombre_completo: formData.nombre_completo,
+        email: formData.email,
+        password: formData.password,
+        negocio_nombre: formData.negocio_nombre,
+        negocio_direccion: formData.negocio_direccion,
+        negocio_rfc: formData.negocio_rfc,
+        negocio_telefono: formData.negocio_telefono || null,
+      });
       onComplete();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al guardar la configuración';
-      setError(msg);
+      const message =
+        err instanceof Error ? err.message : 'Error al guardar la configuración';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const inputClass = "w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all text-sm";
+  const steps = [
+    { num: 1, label: 'Cuenta Admin', icon: User },
+    { num: 2, label: 'Datos del Negocio', icon: Store },
+    { num: 3, label: 'Resumen', icon: Check },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-lg mx-auto">
       {/* Steps indicator */}
-      <div className="flex items-center justify-center gap-2">
-        {[1, 2, 3].map((s) => (
-          <div key={s} className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-2 mb-8">
+        {steps.map((s, idx) => (
+          <div key={s.num} className="flex items-center gap-2">
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
-                s < step
-                  ? 'bg-green-500 text-white'
-                  : s === step
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-200 text-slate-500'
+              className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-medium transition-all ${
+                step === s.num
+                  ? 'bg-blue-600 text-white'
+                  : step > s.num
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-slate-100 text-slate-400'
               }`}
             >
-              {s < step ? <Check className="w-4 h-4" /> : s}
+              <s.icon className="w-4 h-4" />
+              <span className="hidden sm:inline">{s.label}</span>
             </div>
-            {s < 3 && (
+            {idx < steps.length - 1 && (
               <div
-                className={`h-0.5 w-12 transition-all ${
-                  s < step ? 'bg-green-500' : 'bg-slate-200'
+                className={`w-8 h-0.5 ${
+                  step > s.num ? 'bg-green-400' : 'bg-slate-200'
                 }`}
               />
             )}
@@ -101,173 +131,196 @@ export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
         ))}
       </div>
 
-      <div className="text-center">
-        <h2 className="text-lg font-semibold text-slate-900">
-          {step === 1 && 'Cuenta de administrador'}
-          {step === 2 && 'Datos del negocio'}
-          {step === 3 && 'Resumen de configuración'}
-        </h2>
-        <p className="text-sm text-slate-500 mt-1">
-          {step === 1 && 'Crea la cuenta principal del sistema'}
-          {step === 2 && 'Ingresa los datos de tu establecimiento'}
-          {step === 3 && 'Verifica la información antes de finalizar'}
-        </p>
-      </div>
-
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
-          {error}
+        <div className="flex items-center gap-2 p-4 mb-6 rounded-2xl bg-red-50 text-red-700 text-sm">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Step 1: Admin account */}
-      {step === 1 && (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre completo</label>
-            <input
-              type="text"
-              value={formData.nombre_completo}
-              onChange={(e) => updateField('nombre_completo', e.target.value)}
-              className={inputClass}
-              placeholder="Juan Pérez"
-            />
+      <form onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()}>
+        {/* Step 1: Admin Account */}
+        {step === 1 && (
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Nombre Completo *
+              </label>
+              <input
+                type="text"
+                value={formData.nombre_completo}
+                onChange={(e) => updateField('nombre_completo', e.target.value)}
+                required
+                placeholder="Tu nombre"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Correo Electrónico *
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => updateField('email', e.target.value)}
+                required
+                placeholder="admin@ferreteria.com"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Contraseña *
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => updateField('password', e.target.value)}
+                required
+                minLength={6}
+                placeholder="Mínimo 6 caracteres"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Confirmar Contraseña *
+              </label>
+              <input
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) => updateField('confirmPassword', e.target.value)}
+                required
+                placeholder="Repite la contraseña"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Correo electrónico</label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => updateField('email', e.target.value)}
-              className={inputClass}
-              placeholder="admin@ferreteria.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Contraseña</label>
-            <input
-              type="password"
-              value={formData.password}
-              onChange={(e) => updateField('password', e.target.value)}
-              className={inputClass}
-              placeholder="Mínimo 6 caracteres"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirmar contraseña</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className={inputClass}
-              placeholder="Repite la contraseña"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Step 2: Business data */}
-      {step === 2 && (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre del negocio</label>
-            <input
-              type="text"
-              value={formData.negocio_nombre}
-              onChange={(e) => updateField('negocio_nombre', e.target.value)}
-              className={inputClass}
-              placeholder="Ferretería Central"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Dirección</label>
-            <input
-              type="text"
-              value={formData.negocio_direccion}
-              onChange={(e) => updateField('negocio_direccion', e.target.value)}
-              className={inputClass}
-              placeholder="Calle Principal #123"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">RFC</label>
-            <input
-              type="text"
-              value={formData.negocio_rfc}
-              onChange={(e) => updateField('negocio_rfc', e.target.value)}
-              className={inputClass}
-              placeholder="RFC del negocio"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Teléfono (opcional)</label>
-            <input
-              type="text"
-              value={formData.negocio_telefono || ''}
-              onChange={(e) => updateField('negocio_telefono', e.target.value)}
-              className={inputClass}
-              placeholder="+52 55 1234 5678"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Step 3: Summary */}
-      {step === 3 && (
-        <div className="space-y-4">
-          <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-            <h3 className="text-sm font-semibold text-slate-900">Administrador</h3>
-            <p className="text-sm text-slate-600">Nombre: {formData.nombre_completo}</p>
-            <p className="text-sm text-slate-600">Email: {formData.email}</p>
-          </div>
-          <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-            <h3 className="text-sm font-semibold text-slate-900">Negocio</h3>
-            <p className="text-sm text-slate-600">Nombre: {formData.negocio_nombre}</p>
-            <p className="text-sm text-slate-600">Dirección: {formData.negocio_direccion}</p>
-            <p className="text-sm text-slate-600">RFC: {formData.negocio_rfc}</p>
-            {formData.negocio_telefono && (
-              <p className="text-sm text-slate-600">Teléfono: {formData.negocio_telefono}</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Navigation buttons */}
-      <div className="flex justify-between pt-4">
-        {step > 1 ? (
-          <button
-            type="button"
-            onClick={() => setStep((s) => s - 1)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Anterior
-          </button>
-        ) : (
-          <div />
         )}
 
-        {step < 3 ? (
-          <button
-            type="button"
-            onClick={handleNext}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-all"
-          >
-            Siguiente
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isLoading ? 'Guardando...' : 'Finalizar configuración'}
-          </button>
+        {/* Step 2: Business Data */}
+        {step === 2 && (
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Nombre del Negocio *
+              </label>
+              <input
+                type="text"
+                value={formData.negocio_nombre}
+                onChange={(e) => updateField('negocio_nombre', e.target.value)}
+                required
+                placeholder="Ferretería Ejemplo"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Dirección *
+              </label>
+              <input
+                type="text"
+                value={formData.negocio_direccion}
+                onChange={(e) => updateField('negocio_direccion', e.target.value)}
+                required
+                placeholder="Calle, número, colonia, ciudad"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                RFC *
+              </label>
+              <input
+                type="text"
+                value={formData.negocio_rfc}
+                onChange={(e) => updateField('negocio_rfc', e.target.value)}
+                required
+                placeholder="RFC del negocio"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Teléfono
+              </label>
+              <input
+                type="text"
+                value={formData.negocio_telefono}
+                onChange={(e) => updateField('negocio_telefono', e.target.value)}
+                placeholder="Opcional"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
         )}
-      </div>
+
+        {/* Step 3: Summary */}
+        {step === 3 && (
+          <div className="space-y-5">
+            <div className="rounded-2xl bg-slate-50 p-5 space-y-3">
+              <h3 className="font-semibold text-slate-900">Cuenta de Administrador</h3>
+              <div className="text-sm text-slate-600 space-y-1">
+                <p><span className="font-medium">Nombre:</span> {formData.nombre_completo}</p>
+                <p><span className="font-medium">Email:</span> {formData.email}</p>
+              </div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-5 space-y-3">
+              <h3 className="font-semibold text-slate-900">Datos del Negocio</h3>
+              <div className="text-sm text-slate-600 space-y-1">
+                <p><span className="font-medium">Nombre:</span> {formData.negocio_nombre}</p>
+                <p><span className="font-medium">Dirección:</span> {formData.negocio_direccion}</p>
+                <p><span className="font-medium">RFC:</span> {formData.negocio_rfc}</p>
+                {formData.negocio_telefono && (
+                  <p><span className="font-medium">Teléfono:</span> {formData.negocio_telefono}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation buttons */}
+        <div className="flex items-center justify-between mt-8">
+          {step > 1 ? (
+            <button
+              type="button"
+              onClick={prevStep}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Anterior
+            </button>
+          ) : (
+            <div />
+          )}
+
+          {step < 3 ? (
+            <button
+              type="button"
+              onClick={nextStep}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all"
+            >
+              Siguiente
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {isLoading ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+              ) : (
+                <>
+                  <Check className="w-5 h-5" />
+                  Completar Configuración
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </form>
     </div>
   );
 }

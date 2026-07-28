@@ -3,95 +3,110 @@ import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import AppLayout from './components/layout/AppLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
-import SetupWizardPage from './pages/SetupWizardPage';
 import LoginPage from './pages/LoginPage';
+import SetupWizardPage from './pages/SetupWizardPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import HomePage from './pages/HomePage';
 import UserListPage from './pages/UserListPage';
 import CreateUserPage from './pages/CreateUserPage';
 import EditUserPage from './pages/EditUserPage';
 import ProfilePage from './pages/ProfilePage';
 import { Loader2 } from 'lucide-react';
 
-function AppContent() {
-  const { isAuthenticated, isLoading, setupRequired, setupLoading } = useAuth();
+function AuthRouter() {
+  const { isLoading, setupRequired, isAuthenticated } = useAuth();
 
-  if (isLoading || setupLoading) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <p className="text-sm text-slate-500">Cargando...</p>
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="text-center">
+          <Loader2 size={36} className="animate-spin text-blue-600 mx-auto mb-3" />
+          <p className="text-slate-500 font-medium">Verificando estado del sistema...</p>
         </div>
       </div>
+    );
+  }
+
+  if (setupRequired && !isAuthenticated) {
+    return (
+      <Routes>
+        <Route path="*" element={<SetupWizardPage />} />
+      </Routes>
     );
   }
 
   return (
     <Routes>
       {/* Public routes */}
-      <Route
-        path="/setup-wizard"
-        element={
-          setupRequired ? <SetupWizardPage /> : <Navigate to="/login" replace />
-        }
-      />
-      <Route
-        path="/login"
-        element={
-          setupRequired ? <Navigate to="/setup-wizard" replace /> :
-          isAuthenticated ? <Navigate to="/" replace /> :
-          <LoginPage />
-        }
-      />
+      <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
       {/* Protected routes */}
       <Route
+        path="/"
         element={
           <ProtectedRoute>
-            <AppLayout />
+            <AppLayout>
+              <HomePage />
+            </AppLayout>
           </ProtectedRoute>
         }
-      >
-        <Route path="/" element={
-          <div className="flex items-center justify-center h-full">
-            <p className="text-slate-500">Bienvenido al sistema</p>
-          </div>
-        } />
-        <Route path="/usuarios" element={
+      />
+      <Route
+        path="/usuarios"
+        element={
           <ProtectedRoute requiredRole="administrador">
-            <UserListPage />
+            <AppLayout>
+              <UserListPage />
+            </AppLayout>
           </ProtectedRoute>
-        } />
-        <Route path="/usuarios/nuevo" element={
+        }
+      />
+      <Route
+        path="/usuarios/nuevo"
+        element={
           <ProtectedRoute requiredRole="administrador">
-            <CreateUserPage />
+            <AppLayout>
+              <CreateUserPage />
+            </AppLayout>
           </ProtectedRoute>
-        } />
-        <Route path="/usuarios/:id/editar" element={
+        }
+      />
+      <Route
+        path="/usuarios/:id/editar"
+        element={
           <ProtectedRoute requiredRole="administrador">
-            <EditUserPage />
+            <AppLayout>
+              <EditUserPage />
+            </AppLayout>
           </ProtectedRoute>
-        } />
-        <Route path="/perfil" element={<ProfilePage />} />
-      </Route>
+        }
+      />
+      <Route
+        path="/perfil"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ProfilePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppContent />
+        <AuthRouter />
       </AuthProvider>
     </BrowserRouter>
   );
 }
-
-export default App;

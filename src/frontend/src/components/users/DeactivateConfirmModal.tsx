@@ -1,19 +1,13 @@
 import { useState } from 'react';
-import { Loader2, AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, Loader2, X } from 'lucide-react';
 
 interface DeactivateConfirmModalProps {
   userName: string;
-  isActive: boolean;
   onConfirm: () => Promise<void>;
   onCancel: () => void;
 }
 
-export default function DeactivateConfirmModal({
-  userName,
-  isActive,
-  onConfirm,
-  onCancel,
-}: DeactivateConfirmModalProps) {
+export default function DeactivateConfirmModal({ userName, onConfirm, onCancel }: DeactivateConfirmModalProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleConfirm = async () => {
@@ -26,56 +20,38 @@ export default function DeactivateConfirmModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-lg border border-slate-200 p-6 w-full max-w-sm mx-4">
-        <button
-          onClick={onCancel}
-          className="absolute top-4 right-4 p-1 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
-        <div className="flex items-center gap-3 mb-4">
-          <div className={`p-2 rounded-full ${isActive ? 'bg-red-100' : 'bg-green-100'}`}>
-            <AlertTriangle className={`w-5 h-5 ${isActive ? 'text-red-600' : 'text-green-600'}`} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 max-w-sm w-full mx-4">
+        <div className="flex items-start justify-between mb-4">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+            <AlertTriangle size={24} className="text-red-600" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-900">
-            {isActive ? 'Desactivar usuario' : 'Activar usuario'}
-          </h3>
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition-all">
+            <X size={20} />
+          </button>
         </div>
 
+        <h3 className="text-lg font-semibold text-slate-900 mb-2">Desactivar usuario</h3>
         <p className="text-sm text-slate-600 mb-6">
-          {isActive
-            ? `¿Estás seguro de desactivar a "${userName}"? El usuario no podrá iniciar sesión.`
-            : `¿Estás seguro de reactivar a "${userName}"? El usuario podrá iniciar sesión nuevamente.`
-          }
+          ¿Estás seguro de que deseas desactivar a <strong>{userName}</strong>? 
+          El usuario no podrá iniciar sesión hasta que sea reactivado.
         </p>
 
         <div className="flex gap-3">
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="flex-1 py-2.5 px-4 rounded-xl border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-all"
+            className="flex-1 py-2.5 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-all"
           >
             Cancelar
           </button>
           <button
             onClick={handleConfirm}
             disabled={isLoading}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 ${
-              isActive
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-green-600 hover:bg-green-700'
-            }`}
+            className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2"
           >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : isActive ? (
-              'Desactivar'
-            ) : (
-              'Activar'
-            )}
+            {isLoading ? <Loader2 size={18} className="animate-spin" /> : null}
+            {isLoading ? 'Desactivando...' : 'Desactivar'}
           </button>
         </div>
       </div>

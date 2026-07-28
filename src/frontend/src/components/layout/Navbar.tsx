@@ -1,19 +1,21 @@
 import { Menu } from 'lucide-react';
 
 interface NavbarProps {
-  onMenuClick: () => void;
+  onToggleSidebar: () => void;
 }
 
-export default function Navbar({ onMenuClick }: NavbarProps) {
+export default function Navbar({ onToggleSidebar }: NavbarProps) {
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center px-4 lg:px-6">
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 sticky top-0 z-20">
       <button
-        onClick={onMenuClick}
-        className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors mr-3"
+        onClick={onToggleSidebar}
+        className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-all lg:hidden"
       >
-        <Menu className="w-5 h-5 text-slate-600" />
+        <Menu size={22} />
       </button>
-      <h2 className="text-lg font-semibold text-slate-900 lg:hidden">Ferretería</h2>
+      <div className="ml-auto flex items-center gap-4">
+        <span className="text-sm text-slate-500">Ferretería</span>
+      </div>
     </header>
   );
 }

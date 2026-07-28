@@ -3,9 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import Base, engine
-
-from autenticacin_usuarios_y_configuracin_inicial.routes import router
+from database import Base, engine, async_session
+from autenticacin_usuarios_y_configuracin_inicial.routes import router as auth_router
 
 
 @asynccontextmanager
@@ -14,18 +13,18 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
-    # Shutdown
+    # Shutdown: dispose engine
     await engine.dispose()
 
 
 app = FastAPI(
-    title="Ferretería MVP - Backend",
-    description="API REST para sistema de ferretería",
+    title="Ferretera MVP - Backend",
+    description="API REST para el sistema de ferretería",
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS - allow all origins for local MVP
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -34,13 +33,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
+# Routers
 app.include_router(
-    router,
+    auth_router,
     prefix="/api/autenticacin_usuarios_y_configuracin_inicial",
 )
 
 
-@app.get('/health')
+@app.get("/health")
 async def health_check():
-    return {"status": "ok", "message": "Ferretería MVP API is running"}
+    return {"status": "ok", "message": "Ferretera API is running"}

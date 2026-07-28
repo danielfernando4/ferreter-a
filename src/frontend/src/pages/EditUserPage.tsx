@@ -1,88 +1,91 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import UserForm from '../components/users/UserForm';
-import { getUsuario, updateUsuario } from '../services/api';
+import * as api from '../services/api';
+import { ApiError } from '../services/api';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import type { UserOut } from '../types/auth';
-import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 
 export default function EditUserPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [user, setUser] = useState<UserOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [apiError, setApiError] = useState('');
 
   useEffect(() => {
     if (!id) return;
-    let cancelled = false;
-    async function load() {
+    const loadUser = async () => {
       try {
-        const data = await getUsuario(Number(id));
-        if (!cancelled) setUser(data);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Error al cargar el usuario');
+        const data = await api.getUsuario(Number(id));
+        setUser(data);
+      } catch {
+        setApiError('Error al cargar los datos del usuario.');
       } finally {
-        if (!cancelled) setIsLoading(false);
+        setIsLoading(false);
       }
-    }
-    load();
-    return () => { cancelled = true; };
+    };
+    loadUser();
   }, [id]);
 
   const handleSave = async (data: { nombre_completo: string; email: string; rol: string }) => {
-    if (!id) return;
-    await updateUsuario(Number(id), {
-      nombre_completo: data.nombre_completo,
-      email: data.email,
-      rol: data.rol,
-    });
-    navigate('/usuarios');
+    try {
+      await api.updateUsuario(Number(id), data);
+      navigate('/usuarios');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setApiError('Ya existe un usuario con ese correo electrónico.');
+        } else {
+          setApiError(err.message);
+        }
+      } else {
+        setApiError('Error al actualizar el usuario.');
+      }
+      throw err;
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
       </div>
     );
   }
 
-  if (error || !user) {
+  if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <AlertCircle className="w-12 h-12 text-red-400 mb-3" />
-        <p className="text-sm text-red-600">{error || 'Usuario no encontrado'}</p>
-        <button
-          onClick={() => navigate('/usuarios')}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
-        >
+      <div className="text-center py-16">
+        <p className="text-red-600 font-medium">Usuario no encontrado.</p>
+        <Link to="/usuarios" className="text-blue-600 hover:text-blue-700 font-medium mt-2 inline-block">
           Volver a usuarios
-        </button>
+        </Link>
       </div>
     );
   }
 
   return (
     <div>
-      <button
-        onClick={() => navigate('/usuarios')}
-        className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Volver a usuarios
-      </button>
+      <div className="mb-6">
+        <Link
+          to="/usuarios"
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 font-medium mb-2"
+        >
+          <ArrowLeft size={16} />
+          Volver a usuarios
+        </Link>
+        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
+        <p className="text-sm text-slate-500 mt-1">{user.nombre_completo}</p>
+      </div>
 
-      <div className="max-w-lg">
-        <h2 className="text-xl font-semibold text-slate-900 mb-1">Editar usuario</h2>
-        <p className="text-sm text-slate-500 mb-6">Actualiza los datos del usuario.</p>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <UserForm
-            initialData={{ nombre_completo: user.nombre_completo, email: user.email, rol: user.rol }}
-            onSave={handleSave}
-            mode="edit"
-          />
-        </div>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 max-w-lg">
+        {apiError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+            {apiError}
+          </div>
+        )}
+        <UserForm initialData={user} onSave={handleSave} mode="edit" />
       </div>
     </div>
   );

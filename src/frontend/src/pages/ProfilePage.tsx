@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
+import * as api from '../services/api';
 import { useAuth } from '../hooks/useAuth';
-import { getPerfil, updatePerfil, updatePreferencias } from '../services/api';
-import type { PerfilResponse } from '../types/auth';
+import { UserCircle, Loader2 } from 'lucide-react';
 import ProfileForm from '../components/profile/ProfileForm';
 import ChangePasswordForm from '../components/profile/ChangePasswordForm';
 import PreferencesForm from '../components/profile/PreferencesForm';
-import { Loader2, AlertCircle, UserCircle } from 'lucide-react';
+import type { PerfilResponse } from '../types/auth';
 
 export default function ProfilePage() {
   const { updateUser } = useAuth();
@@ -14,73 +14,71 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
+    const load = async () => {
       try {
-        const res = await getPerfil();
-        if (!cancelled) setData(res);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Error al cargar el perfil');
+        const res = await api.getPerfil();
+        setData(res);
+      } catch {
+        setError('Error al cargar el perfil.');
       } finally {
-        if (!cancelled) setIsLoading(false);
+        setIsLoading(false);
       }
-    }
+    };
     load();
-    return () => { cancelled = true; };
   }, []);
 
-  const handleProfileSave = async (profileData: { nombre_completo: string; email: string }) => {
-    const updatedUser = await updatePerfil(profileData);
-    updateUser(updatedUser);
-    setData((prev) => prev ? { ...prev, usuario: updatedUser } : prev);
-  };
-
-  const handlePreferencesSave = async (prefData: { idioma?: string; tema_visual?: string; zona_horaria?: string }) => {
-    const updatedPrefs = await updatePreferencias(prefData);
-    setData((prev) => prev ? { ...prev, preferencias: updatedPrefs } : prev);
+  const handleProfileSave = async (profileData: { nombre_completo?: string; email?: string }) => {
+    const updated = await api.updatePerfil(profileData);
+    updateUser(updated);
+    setData((prev) => (prev ? { ...prev, usuario: updated } : prev));
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 size={28} className="animate-spin text-blue-600" />
       </div>
     );
   }
 
-  if (error || !data) {
+  if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <AlertCircle className="w-12 h-12 text-red-400 mb-3" />
-        <p className="text-sm text-red-600">{error || 'Error al cargar perfil'}</p>
-      </div>
+      <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>
     );
   }
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
-          <UserCircle className="w-6 h-6" />
-        </div>
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">Mi Perfil</h2>
-          <p className="text-sm text-slate-500 mt-1">Gestiona tu información personal y preferencias</p>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900">Mi perfil</h1>
+        <p className="text-sm text-slate-500 mt-1">Administra tu información personal y preferencias</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <ProfileForm user={data.usuario} onSave={handleProfileSave} />
-        </div>
-
-        <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <ChangePasswordForm />
+            <div className="flex items-center gap-3 mb-5">
+              <UserCircle size={28} className="text-slate-400" />
+              <h2 className="text-lg font-semibold text-slate-900">Datos personales</h2>
+            </div>
+            {data && (
+              <ProfileForm user={data.usuario} onSave={handleProfileSave} />
+            )}
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <PreferencesForm preferencias={data.preferencias} onSave={handlePreferencesSave} />
+            <ChangePasswordForm />
+          </div>
+        </div>
+
+        <div>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sticky top-24">
+            {data && (
+              <PreferencesForm
+                preferencias={data.preferencias}
+                onSave={(prefs) => setData((prev) => (prev ? { ...prev, preferencias: prefs } : prev))}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { changePassword } from '../../services/api';
+import * as api from '../../services/api';
+import { ApiError } from '../../services/api';
 import { Loader2 } from 'lucide-react';
 
 export default function ChangePasswordForm() {
@@ -17,17 +18,17 @@ export default function ChangePasswordForm() {
     setSuccess(false);
 
     if (newPassword !== confirmPassword) {
-      setError('Las contraseñas nuevas no coinciden');
+      setError('Las contraseñas nuevas no coinciden.');
       return;
     }
     if (newPassword.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+      setError('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await changePassword({
+      await api.changePassword({
         current_password: currentPassword,
         new_password: newPassword,
         confirm_password: confirmPassword,
@@ -36,8 +37,13 @@ export default function ChangePasswordForm() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar la contraseña');
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Error al cambiar la contraseña.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -45,16 +51,14 @@ export default function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <h3 className="text-base font-semibold text-slate-900">Cambiar contraseña</h3>
+      <h3 className="text-lg font-semibold text-slate-900">Cambiar contraseña</h3>
 
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
-          {error}
-        </div>
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>
       )}
       {success && (
-        <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-sm text-green-700">
-          Contraseña actualizada exitosamente
+        <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
+          Contraseña actualizada exitosamente.
         </div>
       )}
 
@@ -64,8 +68,8 @@ export default function ChangePasswordForm() {
           type={showPasswords ? 'text' : 'password'}
           value={currentPassword}
           onChange={(e) => setCurrentPassword(e.target.value)}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-900"
           required
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
         />
       </div>
 
@@ -75,8 +79,9 @@ export default function ChangePasswordForm() {
           type={showPasswords ? 'text' : 'password'}
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-900"
           required
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+          minLength={6}
         />
       </div>
 
@@ -86,8 +91,10 @@ export default function ChangePasswordForm() {
           type={showPasswords ? 'text' : 'password'}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
+          className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-900 ${
+            confirmPassword && newPassword !== confirmPassword ? 'border-red-400' : 'border-slate-300'
+          }`}
           required
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
         />
       </div>
 
@@ -104,17 +111,12 @@ export default function ChangePasswordForm() {
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 px-4 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2"
       >
-        {isLoading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Cambiando contraseña...
-          </>
-        ) : (
-          'Cambiar contraseña'
-        )}
+        {isLoading ? <Loader2 size={20} className="animate-spin" /> : null}
+        {isLoading ? 'Cambiando...' : 'Cambiar contraseña'}
       </button>
+
     </form>
   );
 }

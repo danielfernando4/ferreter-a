@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { login as apiLogin } from '../../services/api';
+import * as api from '../../services/api';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ApiError } from '../../services/api';
 
-export default function LoginForm() {
+interface LoginFormProps {
+  onSuccess?: () => void;
+}
+
+export default function LoginForm({ onSuccess }: LoginFormProps) {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
@@ -18,13 +23,21 @@ export default function LoginForm() {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     try {
-      const res = await apiLogin({ email, password, remember });
+      const res = await api.login({ email, password, remember });
       login(res.token, res.usuario);
-      navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Credenciales inválidas');
+      onSuccess?.();
+      if (res.usuario.rol === 'administrador') {
+        navigate('/usuarios');
+      } else {
+        navigate('/');
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError('Credenciales inválidas. Verifica tu email y contraseña.');
+      } else {
+        setError('Error de conexión. Intenta de nuevo.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -33,7 +46,7 @@ export default function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
           {error}
         </div>
       )}
@@ -49,7 +62,7 @@ export default function LoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="correo@ejemplo.com"
           required
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
         />
       </div>
 
@@ -65,14 +78,14 @@ export default function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             required
-            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900 pr-10"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
           >
-            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
       </div>
@@ -87,28 +100,21 @@ export default function LoginForm() {
           />
           <span className="text-sm text-slate-600">Recordar sesión</span>
         </label>
-        <button
-          type="button"
-          onClick={() => navigate('/forgot-password')}
+        <Link
+          to="/forgot-password"
           className="text-sm text-blue-600 hover:text-blue-700 font-medium"
         >
           ¿Olvidaste tu contraseña?
-        </button>
+        </Link>
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 px-4 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2"
       >
-        {isLoading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Iniciando sesión...
-          </>
-        ) : (
-          'Iniciar sesión'
-        )}
+        {isLoading ? <Loader2 size={20} className="animate-spin" /> : null}
+        {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
       </button>
     </form>
   );

@@ -1,65 +1,46 @@
-import { useState } from 'react';
-import { Globe, Sun, Clock, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, Settings } from 'lucide-react';
 import type { PreferenciasOut } from '../../types/auth';
-import { updatePreferencias } from '../../services/api';
 
 interface PreferencesFormProps {
   preferencias: PreferenciasOut;
-  onSave: (prefs: PreferenciasOut) => void;
+  onSave: (data: {
+    idioma?: string;
+    tema_visual?: string;
+    zona_horaria?: string;
+  }) => Promise<void>;
 }
 
-const IDIOMAS = [
-  { value: 'es', label: 'Español' },
-  { value: 'en', label: 'English' },
-];
-
-const TEMAS = [
-  { value: 'light', label: 'Claro' },
-  { value: 'dark', label: 'Oscuro' },
-];
-
-const ZONAS_HORARIAS = [
-  { value: 'America/Mexico_City', label: 'Ciudad de México (GMT-6)' },
-  { value: 'America/Monterrey', label: 'Monterrey (GMT-6)' },
-  { value: 'America/Guadalajara', label: 'Guadalajara (GMT-6)' },
-  { value: 'America/Tijuana', label: 'Tijuana (GMT-8)' },
-  { value: 'America/Cancun', label: 'Cancún (GMT-5)' },
-  { value: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires (GMT-3)' },
-  { value: 'America/Santiago', label: 'Santiago (GMT-4)' },
-  { value: 'America/Bogota', label: 'Bogotá (GMT-5)' },
-];
-
-export function PreferencesForm({ preferencias, onSave }: PreferencesFormProps) {
-  const [idioma, setIdioma] = useState(preferencias.idioma || 'es');
-  const [temaVisual, setTemaVisual] = useState(preferencias.tema_visual || 'light');
-  const [zonaHoraria, setZonaHoraria] = useState(
-    preferencias.zona_horaria || 'America/Mexico_City'
-  );
+const PreferencesForm: React.FC<PreferencesFormProps> = ({ preferencias, onSave }) => {
+  const [idioma, setIdioma] = useState('es');
+  const [temaVisual, setTemaVisual] = useState('light');
+  const [zonaHoraria, setZonaHoraria] = useState('America/Mexico_City');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (preferencias) {
+      setIdioma(preferencias.idioma || 'es');
+      setTemaVisual(preferencias.tema_visual || 'light');
+      setZonaHoraria(preferencias.zona_horaria || 'America/Mexico_City');
+    }
+  }, [preferencias]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess(false);
     setIsLoading(true);
+    setSuccess(false);
 
     try {
-      const updated = await updatePreferencias({
+      await onSave({
         idioma,
         tema_visual: temaVisual,
         zona_horaria: zonaHoraria,
       });
-      onSave(updated);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message || 'Error al actualizar preferencias');
-      } else {
-        setError('Error al actualizar preferencias');
-      }
+    } catch {
+      // error handled by parent
     } finally {
       setIsLoading(false);
     }
@@ -67,87 +48,75 @@ export function PreferencesForm({ preferencias, onSave }: PreferencesFormProps) 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="bg-red-50 text-red-700 px-4 py-3 rounded-2xl text-sm">{error}</div>
-      )}
+      <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+        <Settings className="w-4 h-4" />
+        Preferencias
+      </h4>
+
       {success && (
-        <div className="bg-green-50 text-green-700 px-4 py-3 rounded-2xl text-sm">
-          Preferencias actualizadas exitosamente
+        <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-600">
+          Preferencias actualizadas exitosamente.
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          <div className="flex items-center gap-2">
-            <Globe size={16} />
-            Idioma
-          </div>
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Idioma</label>
         <select
           value={idioma}
           onChange={(e) => setIdioma(e.target.value)}
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm appearance-none bg-white"
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm bg-white"
         >
-          {IDIOMAS.map((i) => (
-            <option key={i.value} value={i.value}>
-              {i.label}
-            </option>
-          ))}
+          <option value="es">Español</option>
+          <option value="en">English</option>
         </select>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          <div className="flex items-center gap-2">
-            <Sun size={16} />
-            Tema Visual
-          </div>
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Tema visual</label>
         <select
           value={temaVisual}
           onChange={(e) => setTemaVisual(e.target.value)}
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm appearance-none bg-white"
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm bg-white"
         >
-          {TEMAS.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
-          ))}
+          <option value="light">Claro</option>
+          <option value="dark">Oscuro</option>
         </select>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          <div className="flex items-center gap-2">
-            <Clock size={16} />
-            Zona Horaria
-          </div>
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Zona horaria</label>
         <select
           value={zonaHoraria}
           onChange={(e) => setZonaHoraria(e.target.value)}
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm appearance-none bg-white"
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm bg-white"
         >
-          {ZONAS_HORARIAS.map((z) => (
-            <option key={z.value} value={z.value}>
-              {z.label}
-            </option>
-          ))}
+          <option value="America/Mexico_City">America/Mexico City (UTC-6)</option>
+          <option value="America/Chihuahua">America/Chihuahua (UTC-7)</option>
+          <option value="America/Cancun">America/Cancun (UTC-5)</option>
+          <option value="America/Monterrey">America/Monterrey (UTC-6)</option>
+          <option value="America/Tijuana">America/Tijuana (UTC-8)</option>
+          <option value="America/Argentina/Buenos_Aires">America/Argentina/Buenos_Aires (UTC-3)</option>
+          <option value="America/Bogota">America/Bogota (UTC-5)</option>
+          <option value="America/Lima">America/Lima (UTC-5)</option>
+          <option value="America/Santiago">America/Santiago (UTC-4)</option>
+          <option value="Europe/Madrid">Europe/Madrid (UTC+1)</option>
         </select>
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50"
       >
         {isLoading ? (
-          <Loader2 size={18} className="animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
-          <Globe size={18} />
+          <Settings className="w-4 h-4" />
         )}
         {isLoading ? 'Guardando...' : 'Guardar Preferencias'}
       </button>
     </form>
   );
-}
+};
+
+export default PreferencesForm;

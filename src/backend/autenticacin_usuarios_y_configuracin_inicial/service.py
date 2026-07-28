@@ -1,636 +1,477 @@
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
-from config import ROLES
-
-from . import models as mdl
-from . import schemas as sch
-from .utils import (
+from autenticacin_usuarios_y_configuracin_inicial.models import (
+    ConfiguracionNegocio,
+    PreferenciasUsuario,
+    Rol,
+    TokenRestablecimiento,
+    TokenSesion,
+    Usuario,
+)
+from autenticacin_usuarios_y_configuracin_inicial.utils import (
     generate_token,
-    get_expires_in_seconds,
-    get_reset_token_expiry,
     get_token_expiry,
     hash_password,
     hash_token,
     verify_password,
 )
 
+ROLES_PREDEFINIDOS = {
+    "administrador": "Acceso completo a todas las funcionalidades del sistema.",
+    "vendedor": "Acceso al módulo de Punto de Venta y consulta de inventario.",
+    "almacen": "Acceso al módulo de inventario, órdenes de compra y productos.",
+}
 
-# ─── Setup ──────────────────────────────────────────────────────────────────
 
-async def verificar_estado_setup(db: AsyncSession) -> Tuple[bool, bool]:
-    """Verifica si el setup está completado y si existe algún admin."""
-    result = await db.execute(
-        select(mdl.ConfiguracionNegocio).limit(1),
-    )
+# ─── Setup / Configuración Inicial ──────────────────────────────────────────
+
+async def check_setup_status(db: AsyncSession) -> Tuple[bool, bool]:
+    """Check if setup is completed and if an admin exists."""
+    result = await db.execute(select(ConfiguracionNegocio).limit(1))
     config = result.scalar_one_or_none()
+    setup_completed = config.setup_completado if config else False
 
     result = await db.execute(
-        select(mdl.Usuario)
-        .join(mdl.Rol)
-        .where(mdl.Rol.nombre == "administrador", mdl.Usuario.activo == True)
-        .limit(1),
+        select(Usuario).join(Rol).where(Rol.nombre == "administrador").limit(1)
     )
     admin = result.scalar_one_or_none()
-
-    setup_completed = config is not None and config.setup_completado
     admin_exists = admin is not None
     return setup_completed, admin_exists
 
 
-async def ejecutar_setup(
+async def run_setup(
     db: AsyncSession,
-    data: sch.SetupRequest,
-) -> mdl.Usuario:
-    """Ejecuta la configuración inicial del sistema."""
-    # Verificar que no exista ya un admin
-    result = await db.execute(
-        select(mdl.Usuario)
-        .join(mdl.Rol)
-        .where(mdl.Rol.nombre == "administrador", mdl.Usuario.activo == True)
-        .limit(1),
-    )
-    admin_existente = result.scalar_one_or_none()
-    if admin_existente:
-        raise ValueError("SETUP_ALREADY_COMPLETED")
+    nombre_completo: str,
+    email: str,
+    password: str,
+    negocio_nombre: str,
+    negocio_direccion: str,
+    negocio_rfc: str,
+    negocio_telefono: Optional[str] = None,
+) -> Usuario:
+    """Run the initial setup wizard: create admin user and business config."""
+    # Create default roles if they don't exist
+    for rol_nombre, rol_desc in ROLES_PREDEFINIDOS.items():
+        result = await db.execute(select(Rol).where(Rol.nombre == rol_nombre))
+        existing = result.scalar_one_or_none()
+        if not existing:
+            db.add(Rol(nombre=rol_nombre, descripcion=rol_desc))
 
-    # Verificar que el email no esté registrado
-    result = await db.execute(
-        select(mdl.Usuario).where(mdl.Usuario.email == data.email).limit(1),
-    )
-    if result.scalar_one_or_none():
-        raise ValueError("EMAIL_EXISTS")
-
-    # Crear configuración del negocio
-    config = mdl.ConfiguracionNegocio(
-        nombre=data.negocio_nombre,
-        direccion=data.negocio_direccion,
-        datos_fiscales=data.negocio_rfc,
-        telefono=data.negocio_telefono,
-        setup_completado=True,
-    )
-    db.add(config)
-
-    # Crear o obtener el rol administrador
-    result = await db.execute(
-        select(mdl.Rol).where(mdl.Rol.nombre == "administrador").limit(1),
-    )
-    rol = result.scalar_one_or_none()
-    if not rol:
-        # Crear roles si no existen
-        for nombre, descripcion in ROLES.items():
-            db.add(mdl.Rol(nombre=nombre, descripcion=descripcion))
-        await db.flush()
-        result = await db.execute(
-            select(mdl.Rol).where(mdl.Rol.nombre == "administrador").limit(1),
-        )
-        rol = result.scalar_one()
-
-    # Crear el usuario administrador
-    usuario = mdl.Usuario(
-        nombre_completo=data.nombre_completo,
-        email=data.email,
-        password_hash=hash_password(data.password),
-        rol_id=rol.id,
-        activo=True,
-    )
-    db.add(usuario)
     await db.flush()
 
-    # Crear preferencias por defecto
-    preferencias = mdl.PreferenciasUsuario(
-        usuario_id=usuario.id,
+    # Get admin role
+    result = await db.execute(select(Rol).where(Rol.nombre == "administrador"))
+    admin_rol = result.scalar_one()
+
+    # Create admin user
+    password_hash_value = hash_password(password)
+    admin = Usuario(
+        nombre_completo=nombre_completo,
+        email=email,
+        password_hash=password_hash_value,
+        activo=True,
+        rol_id=admin_rol.id,
+    )
+    db.add(admin)
+    await db.flush()
+
+    # Create default preferences for admin
+    pref = PreferenciasUsuario(
+        usuario_id=admin.id,
         idioma="es",
         tema_visual="light",
-        configuracion_regional="es-MX",
+        configuracion_regional="America/Mexico_City",
     )
-    db.add(preferencias)
+    db.add(pref)
+
+    # Create or update business config
+    result = await db.execute(select(ConfiguracionNegocio).limit(1))
+    config = result.scalar_one_or_none()
+    if config:
+        config.nombre = negocio_nombre
+        config.direccion = negocio_direccion
+        config.datos_fiscales = negocio_rfc
+        config.telefono = negocio_telefono
+        config.setup_completado = True
+    else:
+        config = ConfiguracionNegocio(
+            nombre=negocio_nombre,
+            direccion=negocio_direccion,
+            datos_fiscales=negocio_rfc,
+            telefono=negocio_telefono,
+            setup_completado=True,
+        )
+        db.add(config)
+
     await db.commit()
-    await db.refresh(usuario)
-    return usuario
+    await db.refresh(admin)
+    return admin
 
 
 # ─── Autenticación ──────────────────────────────────────────────────────────
 
-async def autenticar_usuario(
-    db: AsyncSession,
-    email: str,
-    password: str,
-    remember: bool = False,
-) -> Tuple[str, int, mdl.Usuario]:
-    """Autentica un usuario y genera un token de sesión."""
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> Optional[Usuario]:
+    """Verify credentials and return user if valid."""
     result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.email == email, mdl.Usuario.activo == True)
-        .limit(1),
+        select(Usuario).where(
+            Usuario.email == email,
+            Usuario.activo == True,  # noqa: E712
+        )
     )
-    usuario = result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
+    if not user:
+        return None
+    if not verify_password(password, user.password_hash):
+        return None
+    return user
 
-    if not usuario or not verify_password(password, usuario.password_hash):
-        raise ValueError("INVALID_CREDENTIALS")
 
-    # Generar token
+async def create_session_token(db: AsyncSession, user: Usuario, persistent: bool = False) -> str:
+    """Create a new session token for the user."""
     token = generate_token()
-    token_hash = hash_token(token)
-    expiry = get_token_expiry(remember)
+    token_hash_value = hash_token(token)
+    expiry = get_token_expiry(persistent)
 
-    token_sesion = mdl.TokenSesion(
-        usuario_id=usuario.id,
-        token_hash=token_hash,
-        es_persistente=remember,
+    session = TokenSesion(
+        usuario_id=user.id,
+        token_hash=token_hash_value,
+        es_persistente=persistent,
         fecha_expiracion=expiry,
         activo=True,
     )
-    db.add(token_sesion)
+    db.add(session)
 
-    # Actualizar último acceso
-    usuario.ultimo_acceso = datetime.now(timezone.utc)
+    # Update last access
+    user.ultimo_acceso = datetime.now(timezone.utc)
     await db.commit()
-
-    expires_in = get_expires_in_seconds(expiry)
-    return token, expires_in, usuario
+    return token
 
 
-async def cerrar_sesion(db: AsyncSession, token_hash: str) -> None:
-    """Invalida un token de sesión."""
+async def get_user_by_token(db: AsyncSession, raw_token: str) -> Optional[Usuario]:
+    """Get user from a session token."""
+    token_hash_value = hash_token(raw_token)
+    now = datetime.now(timezone.utc)
     result = await db.execute(
-        select(mdl.TokenSesion)
-        .where(mdl.TokenSesion.token_hash == token_hash)
-        .limit(1),
+        select(TokenSesion).where(
+            TokenSesion.token_hash == token_hash_value,
+            TokenSesion.activo == True,  # noqa: E712
+            TokenSesion.fecha_expiracion > now,
+        )
     )
-    token_sesion = result.scalar_one_or_none()
-    if token_sesion:
-        token_sesion.activo = False
+    session = result.scalar_one_or_none()
+    if not session:
+        return None
+    result = await db.execute(
+        select(Usuario).where(Usuario.id == session.usuario_id)
+    )
+    user = result.scalar_one_or_none()
+    return user
+
+
+async def invalidate_token(db: AsyncSession, raw_token: str) -> None:
+    """Invalidate a session token."""
+    token_hash_value = hash_token(raw_token)
+    result = await db.execute(
+        select(TokenSesion).where(TokenSesion.token_hash == token_hash_value)
+    )
+    session = result.scalar_one_or_none()
+    if session:
+        session.activo = False
         await db.commit()
 
 
-async def obtener_usuario_por_token(
-    db: AsyncSession,
-    token: str,
-) -> Optional[mdl.Usuario]:
-    """Obtiene el usuario asociado a un token válido."""
-    token_hash = hash_token(token)
-
-    now = datetime.now(timezone.utc)
+async def invalidate_all_user_tokens(db: AsyncSession, user_id: int) -> None:
+    """Invalidate all active tokens for a user."""
     result = await db.execute(
-        select(mdl.TokenSesion)
-        .where(
-            mdl.TokenSesion.token_hash == token_hash,
-            mdl.TokenSesion.activo == True,
-            mdl.TokenSesion.fecha_expiracion > now,
+        select(TokenSesion).where(
+            TokenSesion.usuario_id == user_id,
+            TokenSesion.activo == True,  # noqa: E712
         )
-        .limit(1),
     )
-    token_sesion = result.scalar_one_or_none()
-    if not token_sesion:
-        return None
-
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == token_sesion.usuario_id)
-        .limit(1),
-    )
-    return result.scalar_one_or_none()
-
-
-async def invalidar_tokens_usuario(db: AsyncSession, usuario_id: int) -> None:
-    """Invalida todos los tokens activos de un usuario."""
-    await db.execute(
-        update(mdl.TokenSesion)
-        .where(
-            mdl.TokenSesion.usuario_id == usuario_id,
-            mdl.TokenSesion.activo == True,
-        )
-        .values(activo=False),
-    )
+    sessions = result.scalars().all()
+    for session in sessions:
+        session.activo = False
     await db.commit()
 
 
 # ─── Recuperación de Contraseña ─────────────────────────────────────────────
 
-async def crear_token_restablecimiento(
-    db: AsyncSession,
-    email: str,
-) -> str:
-    """Crea un token de restablecimiento de contraseña."""
-    result = await db.execute(
-        select(mdl.Usuario).where(mdl.Usuario.email == email).limit(1),
-    )
-    usuario = result.scalar_one_or_none()
-    if not usuario:
-        # No revelar si el email existe
-        return ""
+async def create_reset_token(db: AsyncSession, email: str) -> Optional[str]:
+    """Create a password reset token for the user. Returns None if email not found."""
+    result = await db.execute(select(Usuario).where(Usuario.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        return None
 
     token = generate_token()
-    token_hash_val = hash_token(token)
+    token_hash_value = hash_token(token)
+    expiry = datetime.now(timezone.utc)
 
-    reset_token = mdl.TokenRestablecimiento(
-        usuario_id=usuario.id,
-        token_hash=token_hash_val,
-        fecha_expiracion=get_reset_token_expiry(),
+    from datetime import timedelta
+    expiry += timedelta(hours=1)
+
+    reset = TokenRestablecimiento(
+        usuario_id=user.id,
+        token_hash=token_hash_value,
+        fecha_expiracion=expiry,
         utilizado=False,
     )
-    db.add(reset_token)
+    db.add(reset)
     await db.commit()
     return token
 
 
-async def verificar_token_restablecimiento(
-    db: AsyncSession,
-    token: str,
-) -> Optional[mdl.Usuario]:
-    """Verifica un token de restablecimiento y devuelve el usuario si es válido."""
-    token_hash_val = hash_token(token)
-
+async def verify_reset_token(db: AsyncSession, raw_token: str) -> Optional[str]:
+    """Verify a reset token and return the associated email. Returns None if invalid."""
+    token_hash_value = hash_token(raw_token)
     now = datetime.now(timezone.utc)
     result = await db.execute(
-        select(mdl.TokenRestablecimiento)
-        .where(
-            mdl.TokenRestablecimiento.token_hash == token_hash_val,
-            mdl.TokenRestablecimiento.utilizado == False,
-            mdl.TokenRestablecimiento.fecha_expiracion > now,
+        select(TokenRestablecimiento).where(
+            TokenRestablecimiento.token_hash == token_hash_value,
+            TokenRestablecimiento.utilizado == False,  # noqa: E712
+            TokenRestablecimiento.fecha_expiracion > now,
         )
-        .limit(1),
     )
-    reset_token = result.scalar_one_or_none()
-    if not reset_token:
+    reset = result.scalar_one_or_none()
+    if not reset:
         return None
-
     result = await db.execute(
-        select(mdl.Usuario).where(mdl.Usuario.id == reset_token.usuario_id).limit(1),
+        select(Usuario).where(Usuario.id == reset.usuario_id)
     )
-    return result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
+    if not user:
+        return None
+    return user.email
 
 
-async def restablecer_password(
-    db: AsyncSession,
-    token: str,
-    new_password: str,
-) -> Optional[mdl.Usuario]:
-    """Restablece la contraseña usando un token válido."""
-    token_hash_val = hash_token(token)
-
+async def reset_password(db: AsyncSession, raw_token: str, new_password: str) -> bool:
+    """Reset a user's password using a valid reset token."""
+    token_hash_value = hash_token(raw_token)
     now = datetime.now(timezone.utc)
     result = await db.execute(
-        select(mdl.TokenRestablecimiento)
-        .where(
-            mdl.TokenRestablecimiento.token_hash == token_hash_val,
-            mdl.TokenRestablecimiento.utilizado == False,
-            mdl.TokenRestablecimiento.fecha_expiracion > now,
+        select(TokenRestablecimiento).where(
+            TokenRestablecimiento.token_hash == token_hash_value,
+            TokenRestablecimiento.utilizado == False,  # noqa: E712
+            TokenRestablecimiento.fecha_expiracion > now,
         )
-        .limit(1),
     )
-    reset_token = result.scalar_one_or_none()
-    if not reset_token:
-        return None
-
-    result = await db.execute(
-        select(mdl.Usuario).where(mdl.Usuario.id == reset_token.usuario_id).limit(1),
-    )
-    usuario = result.scalar_one_or_none()
-    if not usuario:
-        return None
-
-    # Actualizar contraseña
-    usuario.password_hash = hash_password(new_password)
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
-
-    # Invalidar token
-    reset_token.utilizado = True
-
-    # Invalidar todos los tokens de sesión del usuario
-    await invalidar_tokens_usuario(db, usuario.id)
-
-    await db.commit()
-    await db.refresh(usuario)
-    return usuario
-
-
-# ─── Gestión de Usuarios ────────────────────────────────────────────────────
-
-async def listar_usuarios(
-    db: AsyncSession,
-    search: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 10,
-) -> Tuple[List[mdl.Usuario], int]:
-    """Lista usuarios con paginación y búsqueda opcional."""
-    query = (
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .order_by(mdl.Usuario.id)
-    )
-
-    count_query = select(func.count(mdl.Usuario.id))
-
-    if search:
-        search_filter = mdl.Usuario.nombre_completo.ilike(f"%{search}%") | \
-            mdl.Usuario.email.ilike(f"%{search}%")
-        query = query.where(search_filter)
-        count_query = count_query.where(search_filter)
-
-    # Obtener total
-    result = await db.execute(count_query)
-    total = result.scalar() or 0
-
-    # Paginación
-    total_pages = max(1, (total + page_size - 1) // page_size)
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
-
-    result = await db.execute(query)
-    usuarios = list(result.scalars().unique().all())
-
-    return usuarios, total
-
-
-async def obtener_usuario_por_id(
-    db: AsyncSession,
-    usuario_id: int,
-) -> Optional[mdl.Usuario]:
-    """Obtiene un usuario por su ID."""
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario_id)
-        .limit(1),
-    )
-    return result.scalar_one_or_none()
-
-
-async def crear_usuario(
-    db: AsyncSession,
-    data: sch.UserCreateRequest,
-) -> mdl.Usuario:
-    """Crea un nuevo usuario."""
-    # Verificar email único
-    result = await db.execute(
-        select(mdl.Usuario).where(mdl.Usuario.email == data.email).limit(1),
-    )
-    if result.scalar_one_or_none():
-        raise ValueError("EMAIL_EXISTS")
-
-    # Obtener rol
-    result = await db.execute(
-        select(mdl.Rol).where(mdl.Rol.nombre == data.rol).limit(1),
-    )
-    rol = result.scalar_one_or_none()
-    if not rol:
-        raise ValueError("INVALID_ROLE")
-
-    usuario = mdl.Usuario(
-        nombre_completo=data.nombre_completo,
-        email=data.email,
-        password_hash=hash_password(data.password),
-        rol_id=rol.id,
-        activo=True,
-    )
-    db.add(usuario)
-    await db.flush()
-
-    # Crear preferencias por defecto
-    preferencias = mdl.PreferenciasUsuario(
-        usuario_id=usuario.id,
-        idioma="es",
-        tema_visual="light",
-        configuracion_regional="es-MX",
-    )
-    db.add(preferencias)
-    await db.commit()
-    await db.refresh(usuario)
-
-    # Recargar con rol para la respuesta
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario.id)
-        .limit(1),
-    )
-    return result.scalar_one()
-
-
-async def actualizar_usuario(
-    db: AsyncSession,
-    usuario_id: int,
-    data: sch.UserUpdateRequest,
-) -> Optional[mdl.Usuario]:
-    """Actualiza los datos de un usuario."""
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario_id)
-        .limit(1),
-    )
-    usuario = result.scalar_one_or_none()
-    if not usuario:
-        return None
-
-    # Verificar email único si cambia
-    if data.email is not None and data.email != usuario.email:
-        result = await db.execute(
-            select(mdl.Usuario)
-            .where(mdl.Usuario.email == data.email, mdl.Usuario.id != usuario_id)
-            .limit(1),
-        )
-        if result.scalar_one_or_none():
-            raise ValueError("EMAIL_EXISTS")
-        usuario.email = data.email
-
-    if data.nombre_completo is not None:
-        usuario.nombre_completo = data.nombre_completo
-
-    if data.rol is not None:
-        result = await db.execute(
-            select(mdl.Rol).where(mdl.Rol.nombre == data.rol).limit(1),
-        )
-        rol = result.scalar_one_or_none()
-        if not rol:
-            raise ValueError("INVALID_ROLE")
-        usuario.rol_id = rol.id
-
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
-    await db.commit()
-    await db.refresh(usuario)
-
-    # Recargar con rol
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario_id)
-        .limit(1),
-    )
-    return result.scalar_one()
-
-
-async def desactivar_usuario(
-    db: AsyncSession,
-    usuario_id: int,
-) -> Optional[mdl.Usuario]:
-    """Desactiva un usuario."""
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario_id)
-        .limit(1),
-    )
-    usuario = result.scalar_one_or_none()
-    if not usuario:
-        return None
-
-    usuario.activo = False
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
-
-    # Invalidar todos los tokens de sesión
-    await invalidar_tokens_usuario(db, usuario.id)
-
-    await db.commit()
-    await db.refresh(usuario)
-
-    # Recargar con rol
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario_id)
-        .limit(1),
-    )
-    return result.scalar_one()
-
-
-async def reactivar_usuario(
-    db: AsyncSession,
-    usuario_id: int,
-) -> Optional[mdl.Usuario]:
-    """Reactivar un usuario desactivado."""
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario_id)
-        .limit(1),
-    )
-    usuario = result.scalar_one_or_none()
-    if not usuario:
-        return None
-
-    usuario.activo = True
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
-    await db.commit()
-    await db.refresh(usuario)
-
-    # Recargar con rol
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario_id)
-        .limit(1),
-    )
-    return result.scalar_one()
-
-
-# ─── Perfil ─────────────────────────────────────────────────────────────────
-
-async def obtener_perfil_completo(
-    db: AsyncSession,
-    usuario_id: int,
-) -> Tuple[Optional[mdl.Usuario], Optional[mdl.PreferenciasUsuario]]:
-    """Obtiene el perfil completo de un usuario."""
-    result = await db.execute(
-        select(mdl.Usuario)
-        .options(joinedload(mdl.Usuario.rol))
-        .where(mdl.Usuario.id == usuario_id)
-        .limit(1),
-    )
-    usuario = result.scalar_one_or_none()
-
-    if not usuario:
-        return None, None
-
-    result = await db.execute(
-        select(mdl.PreferenciasUsuario)
-        .where(mdl.PreferenciasUsuario.usuario_id == usuario_id)
-        .limit(1),
-    )
-    preferencias = result.scalar_one_or_none()
-
-    return usuario, preferencias
-
-
-async def actualizar_perfil(
-    db: AsyncSession,
-    usuario_id: int,
-    data: sch.UserUpdateRequest,
-) -> Optional[mdl.Usuario]:
-    """Actualiza el perfil del usuario (solo nombre y email)."""
-    return await actualizar_usuario(db, usuario_id, data)
-
-
-async def cambiar_password(
-    db: AsyncSession,
-    usuario_id: int,
-    current_password: str,
-    new_password: str,
-) -> bool:
-    """Cambia la contraseña del usuario."""
-    result = await db.execute(
-        select(mdl.Usuario).where(mdl.Usuario.id == usuario_id).limit(1),
-    )
-    usuario = result.scalar_one_or_none()
-    if not usuario:
+    reset = result.scalar_one_or_none()
+    if not reset:
         return False
 
-    if not verify_password(current_password, usuario.password_hash):
-        raise ValueError("INVALID_CURRENT_PASSWORD")
+    result = await db.execute(
+        select(Usuario).where(Usuario.id == reset.usuario_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        return False
 
-    usuario.password_hash = hash_password(new_password)
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
-
-    # Invalidar todos los tokens excepto el actual (se maneja en routes)
+    user.password_hash = hash_password(new_password)
+    reset.utilizado = True
+    await invalidate_all_user_tokens(db, user.id)
     await db.commit()
     return True
 
 
-async def obtener_preferencias(
+# ─── Gestión de Usuarios ────────────────────────────────────────────────────
+
+async def list_usuarios(
     db: AsyncSession,
-    usuario_id: int,
-) -> Optional[mdl.PreferenciasUsuario]:
-    """Obtiene las preferencias de un usuario."""
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 10,
+) -> Tuple[List[Usuario], int]:
+    """List users with pagination and optional search."""
+    query = select(Usuario).join(Rol)
+
+    if search:
+        query = query.where(
+            or_(
+                Usuario.nombre_completo.ilike(f"%{search}%"),
+                Usuario.email.ilike(f"%{search}%"),
+            )
+        )
+
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.order_by(Usuario.fecha_creacion.desc()).offset(offset).limit(page_size)
+    result = await db.execute(query)
+    users = list(result.scalars().all())
+
+    return users, total
+
+
+async def get_usuario_by_id(db: AsyncSession, user_id: int) -> Optional[Usuario]:
+    """Get a single user by ID."""
     result = await db.execute(
-        select(mdl.PreferenciasUsuario)
-        .where(mdl.PreferenciasUsuario.usuario_id == usuario_id)
-        .limit(1),
+        select(Usuario).where(Usuario.id == user_id)
     )
     return result.scalar_one_or_none()
 
 
-async def actualizar_preferencias(
-    db: AsyncSession,
-    usuario_id: int,
-    data: sch.PreferenciasUpdateRequest,
-) -> Optional[mdl.PreferenciasUsuario]:
-    """Actualiza las preferencias de un usuario."""
+async def get_usuario_by_email(db: AsyncSession, email: str) -> Optional[Usuario]:
+    """Get a user by email."""
     result = await db.execute(
-        select(mdl.PreferenciasUsuario)
-        .where(mdl.PreferenciasUsuario.usuario_id == usuario_id)
-        .limit(1),
+        select(Usuario).where(Usuario.email == email)
     )
-    preferencias = result.scalar_one_or_none()
+    return result.scalar_one_or_none()
 
-    if not preferencias:
-        preferencias = mdl.PreferenciasUsuario(usuario_id=usuario_id)
-        db.add(preferencias)
 
-    if data.idioma is not None:
-        preferencias.idioma = data.idioma
-    if data.tema_visual is not None:
-        preferencias.tema_visual = data.tema_visual
-    if data.zona_horaria is not None:
-        preferencias.configuracion_regional = data.zona_horaria
+async def create_usuario(
+    db: AsyncSession,
+    nombre_completo: str,
+    email: str,
+    password: str,
+    rol_nombre: str,
+) -> Usuario:
+    """Create a new user."""
+    password_hash_value = hash_password(password)
+    result = await db.execute(select(Rol).where(Rol.nombre == rol_nombre))
+    rol = result.scalar_one()
+
+    user = Usuario(
+        nombre_completo=nombre_completo,
+        email=email,
+        password_hash=password_hash_value,
+        activo=True,
+        rol_id=rol.id,
+    )
+    db.add(user)
+    await db.flush()
+
+    # Create default preferences
+    pref = PreferenciasUsuario(
+        usuario_id=user.id,
+        idioma="es",
+        tema_visual="light",
+        configuracion_regional="America/Mexico_City",
+    )
+    db.add(pref)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def update_usuario(
+    db: AsyncSession,
+    user_id: int,
+    nombre_completo: Optional[str] = None,
+    email: Optional[str] = None,
+    rol_nombre: Optional[str] = None,
+) -> Optional[Usuario]:
+    """Update a user's details."""
+    user = await get_usuario_by_id(db, user_id)
+    if not user:
+        return None
+
+    if nombre_completo is not None:
+        user.nombre_completo = nombre_completo
+    if email is not None:
+        user.email = email
+    if rol_nombre is not None:
+        result = await db.execute(select(Rol).where(Rol.nombre == rol_nombre))
+        rol = result.scalar_one()
+        user.rol_id = rol.id
+        # Invalidate tokens on role change
+        await invalidate_all_user_tokens(db, user.id)
 
     await db.commit()
-    await db.refresh(preferencias)
-    return preferencias
+    await db.refresh(user)
+    return user
+
+
+async def deactivate_usuario(db: AsyncSession, user_id: int) -> Optional[Usuario]:
+    """Deactivate a user."""
+    user = await get_usuario_by_id(db, user_id)
+    if not user:
+        return None
+    user.activo = False
+    await invalidate_all_user_tokens(db, user_id)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def reactivate_usuario(db: AsyncSession, user_id: int) -> Optional[Usuario]:
+    """Reactivate a user."""
+    user = await get_usuario_by_id(db, user_id)
+    if not user:
+        return None
+    user.activo = True
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+# ─── Perfil y Preferencias ──────────────────────────────────────────────────
+
+async def get_preferencias(db: AsyncSession, user_id: int) -> Optional[PreferenciasUsuario]:
+    """Get user preferences."""
+    result = await db.execute(
+        select(PreferenciasUsuario).where(PreferenciasUsuario.usuario_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_preferencias(
+    db: AsyncSession,
+    user_id: int,
+    idioma: Optional[str] = None,
+    tema_visual: Optional[str] = None,
+    zona_horaria: Optional[str] = None,
+) -> Optional[PreferenciasUsuario]:
+    """Update user preferences."""
+    pref = await get_preferencias(db, user_id)
+    if not pref:
+        return None
+
+    if idioma is not None:
+        pref.idioma = idioma
+    if tema_visual is not None:
+        pref.tema_visual = tema_visual
+    if zona_horaria is not None:
+        pref.configuracion_regional = zona_horaria
+
+    await db.commit()
+    await db.refresh(pref)
+    return pref
+
+
+async def change_user_password(
+    db: AsyncSession, user: Usuario, current_password: str, new_password: str
+) -> bool:
+    """Change a user's password after verifying current password."""
+    if not verify_password(current_password, user.password_hash):
+        return False
+    user.password_hash = hash_password(new_password)
+    await invalidate_all_user_tokens(db, user.id)
+    await db.commit()
+    return True
+
+
+async def update_perfil(
+    db: AsyncSession,
+    user_id: int,
+    nombre_completo: Optional[str] = None,
+    email: Optional[str] = None,
+) -> Optional[Usuario]:
+    """Update user's own profile."""
+    user = await get_usuario_by_id(db, user_id)
+    if not user:
+        return None
+    if nombre_completo is not None:
+        user.nombre_completo = nombre_completo
+    if email is not None:
+        user.email = email
+    await db.commit()
+    await db.refresh(user)
+    return user

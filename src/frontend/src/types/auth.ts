@@ -1,9 +1,12 @@
-// --- Esquemas de Usuario ---
+// ============================================================
+// Types for Autenticación, Usuarios y Configuración Inicial
+// ============================================================
+
 export interface UserOut {
   id: number;
   nombre_completo: string;
   email: string;
-  rol: string; // "administrador" | "vendedor" | "almacen"
+  rol: string;
   activo: boolean;
   fecha_registro: string;
   ultimo_acceso: string | null;
@@ -22,7 +25,6 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
-// --- Esquemas de Autenticación ---
 export interface LoginRequest {
   email: string;
   password: string;
@@ -36,7 +38,6 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
-// --- Esquemas de Setup ---
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -47,17 +48,16 @@ export interface SetupRequest {
   negocio_telefono?: string;
 }
 
-export interface SetupResponse {
-  mensaje: string;
-  usuario: UserOut;
-}
-
 export interface SetupStatusResponse {
   setup_completed: boolean;
   admin_exists: boolean;
 }
 
-// --- Esquemas de Preferencias ---
+export interface SetupResponse {
+  mensaje: string;
+  usuario: UserOut;
+}
+
 export interface PreferenciasOut {
   idioma: string;
   tema_visual: string;
@@ -70,13 +70,17 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
-// --- Esquemas de Recuperación ---
 export interface ForgotPasswordRequest {
   email: string;
 }
 
 export interface ForgotPasswordResponse {
   mensaje: string;
+}
+
+export interface VerifyTokenResponse {
+  valido: boolean;
+  email: string;
 }
 
 export interface ResetPasswordRequest {
@@ -89,11 +93,6 @@ export interface ResetPasswordResponse {
   mensaje: string;
 }
 
-export interface VerifyTokenResponse {
-  valido: boolean;
-  email: string;
-}
-
 export interface ChangePasswordRequest {
   current_password: string;
   new_password: string;
@@ -104,18 +103,12 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
-// --- Esquemas de Respuesta Genéricos ---
 export interface PaginatedUsersResponse {
   items: UserOut[];
   total: number;
   page: number;
   page_size: number;
   total_pages: number;
-}
-
-export interface PerfilUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
 }
 
 export interface UserActionResponse {
@@ -132,10 +125,16 @@ export interface LogoutResponse {
   mensaje: string;
 }
 
-// --- Auth State ---
+// Auth state for context
 export interface AuthState {
   user: UserOut | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+}
+
+export interface AuthContextType extends AuthState {
+  login: (token: string, usuario: UserOut) => void;
+  logout: () => void;
+  updateUser: (usuario: UserOut) => void;
 }

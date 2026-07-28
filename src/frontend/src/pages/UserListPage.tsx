@@ -1,16 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Users } from 'lucide-react';
-import { UserTable } from '../components/users/UserTable';
-import { SearchInput } from '../components/users/SearchInput';
-import { Pagination } from '../components/users/Pagination';
-import { DeactivateConfirmModal } from '../components/users/DeactivateConfirmModal';
-import { ErrorState } from '../components/ErrorState';
+import { Plus } from 'lucide-react';
+import UserTable from '../components/users/UserTable';
+import SearchInput from '../components/users/SearchInput';
+import Pagination from '../components/users/Pagination';
+import DeactivateConfirmModal from '../components/users/DeactivateConfirmModal';
+import ErrorState from '../components/ErrorState';
+import EmptyState from '../components/EmptyState';
 import { TableSkeleton } from '../components/Skeleton';
-import { listUsuarios, reactivateUsuario } from '../services/api';
+import { listUsuarios, deactivateUsuario } from '../services/api';
 import type { UserOut } from '../types/auth';
 
-export default function UserListPage() {
+const UserListPage: React.FC = () => {
   const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState<UserOut[]>([]);
   const [search, setSearch] = useState('');
@@ -19,25 +20,19 @@ export default function UserListPage() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deactivateTarget, setDeactivateTarget] = useState<{
-    id: number;
-    name: string;
-  } | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<UserOut | null>(null);
 
   const fetchUsuarios = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
-      const response = await listUsuarios(search || undefined, page, 10);
-      setUsuarios(response.items);
-      setTotal(response.total);
-      setTotalPages(response.total_pages);
+      const res = await listUsuarios(search || undefined, page, 10);
+      setUsuarios(res.items);
+      setTotal(res.total);
+      setTotalPages(res.total_pages);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message || 'Error al cargar usuarios');
-      } else {
-        setError('Error al cargar usuarios');
-      }
+      const message = err instanceof Error ? err.message : 'Error al cargar usuarios.';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -51,105 +46,90 @@ export default function UserListPage() {
     setPage(1);
   }, [search]);
 
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
+  const handleEdit = (user: UserOut) => {
+    navigate(`/usuarios/${user.id}/editar`);
   };
 
-  const handleEdit = (id: number) => {
-    navigate(`/usuarios/${id}/editar`);
-  };
+  const handleDeactivate = async () => {
+    if (!deactivateTarget) return;
 
-  const handleDeactivateClick = (id: number, name: string) => {
-    setDeactivateTarget({ id, name });
-  };
-
-  const handleReactivate = async (id: number) => {
     try {
-      await reactivateUsuario(id);
+      await deactivateUsuario(deactivateTarget.id);
+      setDeactivateTarget(null);
       fetchUsuarios();
-    } catch {
-      // Error handled silently
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al desactivar usuario.';
+      setError(message);
     }
   };
 
-  const handleDeactivateConfirm = () => {
-    setDeactivateTarget(null);
-    fetchUsuarios();
-  };
-
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Usuarios</h1>
-          <p className="text-slate-500 text-sm mt-1">
+          <h2 className="text-2xl font-bold text-slate-900">Usuarios</h2>
+          <p className="text-sm text-slate-500 mt-1">
             Gestiona los usuarios del sistema
           </p>
         </div>
         <button
+          type="button"
           onClick={() => navigate('/usuarios/nuevo')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 transition-all text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium"
         >
-          <Plus size={18} />
+          <Plus className="w-4 h-4" />
           Nuevo Usuario
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200">
-        <div className="p-4 border-b border-slate-100">
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-            <div className="w-full sm:w-72">
-              <SearchInput
-                value={search}
-                onChange={handleSearchChange}
-                placeholder="Buscar por nombre o email..."
-              />
-            </div>
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Users size={16} />
-              {total} usuario{total !== 1 ? 's' : ''}
-            </div>
-          </div>
-        </div>
+      <div className="max-w-sm">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre o email..."
+        />
+      </div>
 
-        <div className="p-4">
-          {isLoading ? (
-            <TableSkeleton rows={5} cols={5} />
-          ) : error ? (
-            <ErrorState
-              title="Error al cargar usuarios"
-              message={error}
-              onRetry={fetchUsuarios}
-            />
-          ) : (
+      <div className="bg-white rounded-2xl shadow-sm p-6">
+        {isLoading ? (
+          <TableSkeleton rows={6} cols={5} />
+        ) : error ? (
+          <ErrorState message={error} onRetry={fetchUsuarios} />
+        ) : usuarios.length === 0 ? (
+          <EmptyState
+            title="No hay usuarios"
+            message={search ? 'No se encontraron usuarios con ese criterio de búsqueda.' : 'Aún no hay usuarios registrados en el sistema.'}
+            actionLabel={!search ? 'Crear Usuario' : undefined}
+            onAction={!search ? () => navigate('/usuarios/nuevo') : undefined}
+          />
+        ) : (
+          <>
             <UserTable
               usuarios={usuarios}
               onEdit={handleEdit}
-              onDeactivate={handleDeactivateClick}
-              onReactivate={handleReactivate}
+              onDeactivate={(user) => setDeactivateTarget(user)}
             />
-          )}
-        </div>
-
-        {!isLoading && !error && (
-          <div className="px-4 pb-4">
             <Pagination
               currentPage={page}
               totalPages={totalPages}
               onPageChange={setPage}
             />
-          </div>
+            <div className="text-center text-xs text-slate-400 mt-3">
+              {total} usuario(s) encontrado(s)
+            </div>
+          </>
         )}
       </div>
 
       {deactivateTarget && (
         <DeactivateConfirmModal
-          userId={deactivateTarget.id}
-          userName={deactivateTarget.name}
-          onConfirm={handleDeactivateConfirm}
+          userName={deactivateTarget.nombre_completo}
+          onConfirm={handleDeactivate}
           onCancel={() => setDeactivateTarget(null)}
         />
       )}
     </div>
   );
-}
+};
+
+export default UserListPage;

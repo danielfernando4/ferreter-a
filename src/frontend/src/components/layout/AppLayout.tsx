@@ -1,24 +1,32 @@
-import { useState, type ReactNode } from 'react';
-import { Navbar } from './Navbar';
-import { Sidebar } from './Sidebar';
+import React, { useState } from 'react';
+import Navbar from './Navbar';
+import Sidebar from './Sidebar';
 
 interface AppLayoutProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="lg:pl-64">
-        <Navbar
-          onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
-          sidebarOpen={sidebarOpen}
-        />
-        <main className="p-4 lg:p-6">{children}</main>
+      <Navbar
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+      />
+      <div className="flex">
+        <Sidebar open={sidebarOpen} />
+        <main
+          className={`flex-1 transition-all duration-300 p-6 ${
+            sidebarOpen ? 'md:ml-64' : 'md:ml-16'
+          }`}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );
-}
+};
+
+export default AppLayout;

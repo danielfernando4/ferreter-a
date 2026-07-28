@@ -1,58 +1,36 @@
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
-
 from passlib.context import CryptContext
-
-from config import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    ALGORITHM,
-    REMEMBER_TOKEN_EXPIRE_DAYS,
-    RESET_TOKEN_EXPIRE_HOURS,
-    SECRET_KEY,
-)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def hash_password(password: str) -> str:
-    """Hash a password with bcrypt, pre-hashing with SHA-256 to avoid 72-byte limit."""
-    normalized = hashlib.sha256(password.encode()).hexdigest()
-    return pwd_context.hash(normalized)
+def _normalize_password(pw: str) -> str:
+    return hashlib.sha256(pw.encode("utf-8")).hexdigest()
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
-    normalized = hashlib.sha256(plain_password.encode()).hexdigest()
-    return pwd_context.verify(normalized, hashed_password)
+def hash_password(pw: str) -> str:
+    # SHA-256 pre-hash prevents bcrypt 72-byte truncation
+    return pwd_context.hash(_normalize_password(pw))
 
 
-def generate_token() -> str:
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(_normalize_password(plain), hashed)
+
+
+def generate_token(length: int = 48) -> str:
     """Generate a cryptographically secure random token."""
-    return secrets.token_urlsafe(48)
+    return secrets.token_hex(length)
 
 
 def hash_token(token: str) -> str:
-    """Hash a token for storage."""
-    return hashlib.sha256(token.encode()).hexdigest()
+    """Hash a token for secure storage."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def get_token_expiry(remember: bool = False) -> datetime:
-    """Get the expiry datetime for a token."""
-    if remember:
-        delta = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
-    else:
-        delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    return datetime.now(timezone.utc) + delta
-
-
-def get_reset_token_expiry() -> datetime:
-    """Get the expiry datetime for a reset token."""
-    return datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_EXPIRE_HOURS)
-
-
-def get_expires_in_seconds(expiry: datetime) -> int:
-    """Get the number of seconds until expiry."""
-    now = datetime.now(timezone.utc)
-    delta = expiry - now
-    return max(0, int(delta.total_seconds()))
+def get_token_expiry(persistent: bool = False) -> datetime:
+    """Return expiry datetime for a token."""
+    if persistent:
+        return datetime.now(timezone.utc) + timedelta(days=30)
+    return datetime.now(timezone.utc) + timedelta(hours=8)

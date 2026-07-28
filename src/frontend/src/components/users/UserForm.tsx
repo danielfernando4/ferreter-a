@@ -1,21 +1,19 @@
-import { useState, useEffect } from 'react';
-import { Loader2, User, Mail, Lock, Shield } from 'lucide-react';
-import type { UserOut, UserCreateRequest, UserUpdateRequest } from '../../types/auth';
-import { createUsuario, updateUsuario } from '../../services/api';
+import React, { useState, useEffect } from 'react';
+import { Loader2, Save } from 'lucide-react';
+import type { UserOut } from '../../types/auth';
 
 interface UserFormProps {
-  initialData?: UserOut;
-  onSave: () => void;
+  initialData?: UserOut | null;
   mode: 'create' | 'edit';
+  onSave: (data: {
+    nombre_completo: string;
+    email: string;
+    password?: string;
+    rol: string;
+  }) => Promise<void>;
 }
 
-const ROLES = [
-  { value: 'administrador', label: 'Administrador' },
-  { value: 'vendedor', label: 'Vendedor / Cajero' },
-  { value: 'almacen', label: 'Almacén / Comprador' },
-];
-
-export function UserForm({ initialData, onSave, mode }: UserFormProps) {
+const UserForm: React.FC<UserFormProps> = ({ initialData, mode, onSave }) => {
   const [nombreCompleto, setNombreCompleto] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,20 +33,21 @@ export function UserForm({ initialData, onSave, mode }: UserFormProps) {
     const newErrors: Record<string, string> = {};
 
     if (!nombreCompleto.trim()) {
-      newErrors.nombreCompleto = 'El nombre es obligatorio';
+      newErrors.nombreCompleto = 'El nombre completo es obligatorio.';
     }
     if (!email.trim()) {
-      newErrors.email = 'El correo electrónico es obligatorio';
-    } else if (!email.includes('@')) {
-      newErrors.email = 'Correo electrónico inválido';
+      newErrors.email = 'El correo electrónico es obligatorio.';
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      newErrors.email = 'El formato del correo no es válido.';
     }
     if (mode === 'create' && !password) {
-      newErrors.password = 'La contraseña es obligatoria';
-    } else if (mode === 'create' && password.length < 6) {
-      newErrors.password = 'La contraseña debe tener al menos 6 caracteres';
+      newErrors.password = 'La contraseña es obligatoria.';
+    }
+    if (mode === 'create' && password && password.length < 6) {
+      newErrors.password = 'La contraseña debe tener al menos 6 caracteres.';
     }
     if (!rol) {
-      newErrors.rol = 'El rol es obligatorio';
+      newErrors.rol = 'El rol es obligatorio.';
     }
 
     setErrors(newErrors);
@@ -61,29 +60,20 @@ export function UserForm({ initialData, onSave, mode }: UserFormProps) {
 
     setIsLoading(true);
     try {
+      const data: {
+        nombre_completo: string;
+        email: string;
+        password?: string;
+        rol: string;
+      } = {
+        nombre_completo: nombreCompleto.trim(),
+        email: email.trim(),
+        rol,
+      };
       if (mode === 'create') {
-        const data: UserCreateRequest = {
-          nombre_completo: nombreCompleto.trim(),
-          email: email.trim(),
-          password,
-          rol,
-        };
-        await createUsuario(data);
-      } else if (initialData) {
-        const data: UserUpdateRequest = {
-          nombre_completo: nombreCompleto.trim(),
-          email: email.trim(),
-          rol,
-        };
-        await updateUsuario(initialData.id, data);
+        data.password = password;
       }
-      onSave();
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setErrors({ form: err.message || 'Error al guardar usuario' });
-      } else {
-        setErrors({ form: 'Error al guardar usuario' });
-      }
+      await onSave(data);
     } finally {
       setIsLoading(false);
     }
@@ -91,119 +81,104 @@ export function UserForm({ initialData, onSave, mode }: UserFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {errors.form && (
-        <div className="bg-red-50 text-red-700 px-4 py-3 rounded-2xl text-sm">
-          {errors.form}
-        </div>
-      )}
-
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          Nombre Completo
+        <label htmlFor="nombre" className="block text-sm font-medium text-slate-700 mb-1">
+          Nombre completo *
         </label>
-        <div className="relative">
-          <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={nombreCompleto}
-            onChange={(e) => setNombreCompleto(e.target.value)}
-            placeholder="Nombre del usuario"
-            className={`w-full pl-10 pr-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm ${
-              errors.nombreCompleto ? 'border-red-300 bg-red-50' : 'border-slate-300'
-            }`}
-          />
-        </div>
+        <input
+          id="nombre"
+          type="text"
+          value={nombreCompleto}
+          onChange={(e) => setNombreCompleto(e.target.value)}
+          placeholder="Nombre completo"
+          className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm ${
+            errors.nombreCompleto ? 'border-red-300 bg-red-50' : 'border-slate-300'
+          }`}
+        />
         {errors.nombreCompleto && (
-          <p className="text-red-500 text-xs mt-1">{errors.nombreCompleto}</p>
+          <p className="text-xs text-red-500 mt-1">{errors.nombreCompleto}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          Correo Electrónico
+        <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">
+          Correo electrónico *
         </label>
-        <div className="relative">
-          <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="correo@ejemplo.com"
-            className={`w-full pl-10 pr-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm ${
-              errors.email ? 'border-red-300 bg-red-50' : 'border-slate-300'
-            }`}
-          />
-        </div>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="correo@ejemplo.com"
+          className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm ${
+            errors.email ? 'border-red-300 bg-red-50' : 'border-slate-300'
+          }`}
+        />
         {errors.email && (
-          <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+          <p className="text-xs text-red-500 mt-1">{errors.email}</p>
         )}
       </div>
 
       {mode === 'create' && (
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Contraseña
+          <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
+            Contraseña *
           </label>
-          <div className="relative">
-            <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              className={`w-full pl-10 pr-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm ${
-                errors.password ? 'border-red-300 bg-red-50' : 'border-slate-300'
-              }`}
-            />
-          </div>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Mínimo 6 caracteres"
+            className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm ${
+              errors.password ? 'border-red-300 bg-red-50' : 'border-slate-300'
+            }`}
+          />
           {errors.password && (
-            <p className="text-red-500 text-xs mt-1">{errors.password}</p>
+            <p className="text-xs text-red-500 mt-1">{errors.password}</p>
           )}
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          Rol
+        <label htmlFor="rol" className="block text-sm font-medium text-slate-700 mb-1">
+          Rol *
         </label>
-        <div className="relative">
-          <Shield size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-          <select
-            value={rol}
-            onChange={(e) => setRol(e.target.value)}
-            className={`w-full pl-10 pr-4 py-2.5 border rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm appearance-none bg-white ${
-              errors.rol ? 'border-red-300 bg-red-50' : 'border-slate-300'
-            }`}
-          >
-            <option value="">Selecciona un rol</option>
-            {ROLES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <select
+          id="rol"
+          value={rol}
+          onChange={(e) => setRol(e.target.value)}
+          className={`w-full px-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm bg-white ${
+            errors.rol ? 'border-red-300 bg-red-50' : 'border-slate-300'
+          }`}
+        >
+          <option value="administrador">Administrador</option>
+          <option value="vendedor">Vendedor</option>
+          <option value="almacen">Almacén</option>
+        </select>
         {errors.rol && (
-          <p className="text-red-500 text-xs mt-1">{errors.rol}</p>
+          <p className="text-xs text-red-500 mt-1">{errors.rol}</p>
         )}
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isLoading ? (
-          <Loader2 size={18} className="animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
-          <User size={18} />
+          <Save className="w-4 h-4" />
         )}
         {isLoading
           ? 'Guardando...'
           : mode === 'create'
           ? 'Crear Usuario'
-          : 'Actualizar Usuario'}
+          : 'Guardar Cambios'}
       </button>
     </form>
   );
-}
+};
+
+export default UserForm;

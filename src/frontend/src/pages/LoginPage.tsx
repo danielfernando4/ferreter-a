@@ -1,43 +1,64 @@
-import { Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Store } from 'lucide-react';
+import LoginForm from '../components/auth/LoginForm';
+import LoadingState from '../components/LoadingState';
 import { useAuth } from '../hooks/useAuth';
-import { LoadingState } from '../components/LoadingState';
-import { LoginForm } from '../components/auth/LoginForm';
-import { Store, Lock } from 'lucide-react';
+import { checkSetupStatus } from '../services/api';
 
-export default function LoginPage() {
-  const { isAuthenticated, isLoading, setupRequired, isCheckingSetup } = useAuth();
+const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [checkingSetup, setCheckingSetup] = useState(true);
 
-  if (isCheckingSetup || isLoading) {
-    return <LoadingState message="Cargando..." />;
-  }
+  useEffect(() => {
+    const verify = async () => {
+      try {
+        const status = await checkSetupStatus();
+        if (!status.setup_completed && !status.admin_exists) {
+          navigate('/setup-wizard', { replace: true });
+          return;
+        }
+      } catch {
+        // If error, assume setup is done
+      } finally {
+        setCheckingSetup(false);
+      }
+    };
 
-  if (setupRequired) {
-    return <Navigate to="/setup-wizard" replace />;
-  }
+    if (!authLoading && !isAuthenticated) {
+      verify();
+    } else if (!authLoading && isAuthenticated) {
+      navigate('/', { replace: true });
+    } else {
+      setCheckingSetup(false);
+    }
+  }, [navigate, isAuthenticated, authLoading]);
 
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+  if (authLoading || checkingSetup) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <LoadingState message="Verificando..." />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center py-8">
+      <div className="bg-white rounded-2xl shadow-sm p-8 max-w-md w-full mx-4">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-            <Store size={32} className="text-white" />
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Store className="w-8 h-8 text-blue-600" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Ferretería</h1>
-          <p className="text-slate-500 mt-1">Inicia sesión para continuar</p>
+          <h2 className="text-2xl font-bold text-slate-900">Ferretería</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Inicia sesión para continuar
+          </p>
         </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <div className="flex items-center gap-2 mb-6 pb-4 border-b border-slate-100">
-            <Lock size={18} className="text-blue-600" />
-            <h2 className="text-lg font-semibold text-slate-900">Inicio de Sesión</h2>
-          </div>
-          <LoginForm />
-        </div>
+        <LoginForm />
       </div>
     </div>
   );
-}
+};
+
+export default LoginPage;

@@ -1,18 +1,22 @@
-import { Navigate } from 'react-router-dom';
+import React from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { LoadingState } from '../components/LoadingState';
-import { Users, Package, ShoppingCart, BarChart3 } from 'lucide-react';
+import { Store, Users, UserCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-export default function HomePage() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+const HomePage: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-  if (isLoading) {
-    return <LoadingState message="Verificando sesión..." />;
+  if (!user) {
+    return null;
   }
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+  const roleLabel =
+    user.rol === 'administrador'
+      ? 'Administrador'
+      : user.rol === 'vendedor'
+      ? 'Vendedor'
+      : 'Almacén';
 
   const modules = [
     {
@@ -20,76 +24,67 @@ export default function HomePage() {
       description: 'Gestiona los usuarios del sistema',
       icon: Users,
       path: '/usuarios',
-      color: 'bg-blue-500',
+      color: 'bg-blue-50 text-blue-600',
+      roles: ['administrador'],
     },
     {
-      title: 'Productos',
-      description: 'Catálogo de productos y servicios',
-      icon: Package,
-      path: '#',
-      color: 'bg-green-500',
-      soon: true,
-    },
-    {
-      title: 'Ventas',
-      description: 'Punto de venta y facturación',
-      icon: ShoppingCart,
-      path: '#',
-      color: 'bg-amber-500',
-      soon: true,
-    },
-    {
-      title: 'Reportes',
-      description: 'Estadísticas y reportes del negocio',
-      icon: BarChart3,
-      path: '#',
-      color: 'bg-purple-500',
-      soon: true,
+      title: 'Mi Perfil',
+      description: 'Administra tus datos y preferencias',
+      icon: UserCircle,
+      path: '/perfil',
+      color: 'bg-purple-50 text-purple-600',
+      roles: ['administrador', 'vendedor', 'almacen'],
     },
   ];
 
+  const filteredModules = modules.filter((m) =>
+    m.roles.includes(user.rol)
+  );
+
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">
-          Bienvenido, {user?.nombre_completo || 'Usuario'}
-        </h1>
-        <p className="text-slate-500 mt-1">
-          Panel principal del sistema Ferretería
-        </p>
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl shadow-sm p-6">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+            <Store className="w-8 h-8 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">
+              Bienvenido, {user.nombre_completo}
+            </h2>
+            <p className="text-sm text-slate-500">
+              Has iniciado sesión como{' '}
+              <span className="font-medium text-slate-700">{roleLabel}</span>
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {modules.map((mod) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredModules.map((mod) => {
           const Icon = mod.icon;
           return (
-            <div
-              key={mod.title}
-              className={`bg-white rounded-2xl shadow-sm border border-slate-200 p-6 transition-all ${
-                !mod.soon ? 'hover:shadow-md hover:border-blue-200 cursor-pointer' : ''
-              }`}
-              onClick={() => {
-                if (!mod.soon && mod.path !== '#') {
-                  window.location.href = mod.path;
-                }
-              }}
+            <button
+              key={mod.path}
+              type="button"
+              onClick={() => navigate(mod.path)}
+              className="bg-white rounded-2xl shadow-sm p-6 text-left hover:shadow-md transition-all group"
             >
               <div
-                className={`w-12 h-12 ${mod.color} rounded-2xl flex items-center justify-center mb-4`}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${mod.color}`}
               >
-                <Icon size={24} className="text-white" />
+                <Icon className="w-6 h-6" />
               </div>
-              <h3 className="font-semibold text-slate-900 mb-1">{mod.title}</h3>
-              <p className="text-sm text-slate-500">{mod.description}</p>
-              {mod.soon && (
-                <span className="inline-block mt-3 text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-2xl">
-                  Próximamente
-                </span>
-              )}
-            </div>
+              <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
+                {mod.title}
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">{mod.description}</p>
+            </button>
           );
         })}
       </div>
     </div>
   );
-}
+};
+
+export default HomePage;

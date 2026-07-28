@@ -1,3 +1,6 @@
+// ============================================================
+// API Client — Autenticación, Usuarios y Configuración Inicial
+// ============================================================
 import type {
   SetupStatusResponse,
   SetupRequest,
@@ -6,68 +9,64 @@ import type {
   LoginResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  VerifyTokenResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
-  VerifyTokenResponse,
   UserOut,
+  LogoutResponse,
+  PaginatedUsersResponse,
   UserCreateRequest,
   UserUpdateRequest,
-  PaginatedUsersResponse,
   UserActionResponse,
   PerfilResponse,
-  PerfilUpdateRequest,
   PreferenciasOut,
   PreferenciasUpdateRequest,
   ChangePasswordRequest,
   ChangePasswordResponse,
-  LogoutResponse,
 } from '../types/auth';
 
 const API_URL = '/api/autenticacin_usuarios_y_configuracin_inicial';
 
-class ApiError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-  }
-}
-
+// ============================================================
+// Helper: generic request function
+// ============================================================
 async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
   const token = localStorage.getItem('auth_token');
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...((options.headers as Record<string, string>) || {}),
+    ...(options.headers as Record<string, string>),
   };
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
   });
 
-  if (!response.ok) {
-    let errorMessage = `Error ${response.status}`;
+  if (!res.ok) {
+    let errorMsg = `Error ${res.status}`;
     try {
-      const errorData = await response.json();
-      errorMessage = errorData.detail || errorData.mensaje || errorMessage;
+      const errorBody = await res.json();
+      errorMsg = errorBody.detail || errorBody.mensaje || errorMsg;
     } catch {
-      // Use default error message
+      // ignore parse error
     }
-    throw new ApiError(errorMessage, response.status);
+    throw new Error(errorMsg);
   }
 
-  return response.json();
+  return res.json();
 }
 
-// --- Endpoints Públicos (Sin autenticación) ---
+// ============================================================
+// Auth Endpoints (Públicos)
+// ============================================================
 
 export async function checkSetupStatus(): Promise<SetupStatusResponse> {
   return request<SetupStatusResponse>('/auth/check-setup');
@@ -80,7 +79,7 @@ export async function runSetup(data: SetupRequest): Promise<SetupResponse> {
   });
 }
 
-export async function login(data: LoginRequest): Promise<LoginResponse> {
+export async function loginUser(data: LoginRequest): Promise<LoginResponse> {
   return request<LoginResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -111,32 +110,38 @@ export async function resetPassword(
   });
 }
 
-// --- Endpoints Protegidos (Requiere token Bearer) ---
+// ============================================================
+// Auth Endpoints (Protegidos)
+// ============================================================
 
 export async function getMe(): Promise<UserOut> {
   return request<UserOut>('/auth/me');
 }
 
-export async function logout(): Promise<LogoutResponse> {
+export async function logoutUser(): Promise<LogoutResponse> {
   return request<LogoutResponse>('/auth/logout', {
     method: 'POST',
   });
 }
 
+// ============================================================
+// Usuarios Endpoints (Protegidos - Admin)
+// ============================================================
+
 export async function listUsuarios(
   search?: string,
   page: number = 1,
-  pageSize: number = 10
+  page_size: number = 10
 ): Promise<PaginatedUsersResponse> {
   const params = new URLSearchParams();
-  if (search) params.append('search', search);
-  params.append('page', String(page));
-  params.append('page_size', String(pageSize));
+  params.set('page', String(page));
+  params.set('page_size', String(page_size));
+  if (search) params.set('search', search);
   return request<PaginatedUsersResponse>(`/usuarios?${params.toString()}`);
 }
 
-export async function getUsuario(id: number): Promise<UserOut> {
-  return request<UserOut>(`/usuarios/${id}`);
+export async function getUsuario(userId: number): Promise<UserOut> {
+  return request<UserOut>(`/usuarios/${userId}`);
 }
 
 export async function createUsuario(
@@ -149,37 +154,41 @@ export async function createUsuario(
 }
 
 export async function updateUsuario(
-  id: number,
+  userId: number,
   data: UserUpdateRequest
 ): Promise<UserOut> {
-  return request<UserOut>(`/usuarios/${id}`, {
+  return request<UserOut>(`/usuarios/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
 export async function deactivateUsuario(
-  id: number
+  userId: number
 ): Promise<UserActionResponse> {
-  return request<UserActionResponse>(`/usuarios/${id}/deactivate`, {
+  return request<UserActionResponse>(`/usuarios/${userId}/deactivate`, {
     method: 'PATCH',
   });
 }
 
 export async function reactivateUsuario(
-  id: number
+  userId: number
 ): Promise<UserActionResponse> {
-  return request<UserActionResponse>(`/usuarios/${id}/reactivate`, {
+  return request<UserActionResponse>(`/usuarios/${userId}/reactivate`, {
     method: 'PATCH',
   });
 }
+
+// ============================================================
+// Perfil Endpoints (Protegidos)
+// ============================================================
 
 export async function getPerfil(): Promise<PerfilResponse> {
   return request<PerfilResponse>('/perfil');
 }
 
 export async function updatePerfil(
-  data: PerfilUpdateRequest
+  data: { nombre_completo?: string; email?: string }
 ): Promise<UserOut> {
   return request<UserOut>('/perfil', {
     method: 'PUT',
@@ -208,5 +217,3 @@ export async function updatePreferencias(
     body: JSON.stringify(data),
   });
 }
-
-export { ApiError, API_URL };

@@ -21,11 +21,6 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
-export interface SetupStatusResponse {
-  setup_completed: boolean;
-  admin_exists: boolean;
-}
-
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -39,6 +34,11 @@ export interface SetupRequest {
 export interface SetupResponse {
   mensaje: string;
   usuario: UserOut;
+}
+
+export interface SetupStatusResponse {
+  setup_completed: boolean;
+  admin_exists: boolean;
 }
 
 export interface ForgotPasswordRequest {
@@ -64,6 +64,10 @@ export interface ResetPasswordResponse {
   mensaje: string;
 }
 
+export interface LogoutResponse {
+  mensaje: string;
+}
+
 export interface UserCreateRequest {
   nombre_completo: string;
   email: string;
@@ -77,6 +81,11 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
+export interface UserActionResponse {
+  mensaje: string;
+  usuario: UserOut;
+}
+
 export interface PaginatedUsersResponse {
   items: UserOut[];
   total: number;
@@ -85,9 +94,16 @@ export interface PaginatedUsersResponse {
   total_pages: number;
 }
 
-export interface UserActionResponse {
-  mensaje: string;
-  usuario: UserOut;
+export interface PreferenciasOut {
+  idioma: string;
+  tema_visual: string;
+  zona_horaria: string;
+}
+
+export interface PreferenciasUpdateRequest {
+  idioma?: string;
+  tema_visual?: string;
+  zona_horaria?: string;
 }
 
 export interface PerfilResponse {
@@ -107,28 +123,5 @@ export interface ChangePasswordRequest {
 }
 
 export interface ChangePasswordResponse {
-  mensaje: string;
-}
-
-export interface PreferenciasOut {
-  idioma: string;
-  tema_visual: string;
-  zona_horaria: string;
-}
-
-export interface PreferenciasUpdateRequest {
-  idioma?: string;
-  tema_visual?: string;
-  zona_horaria?: string;
-}
-
-export interface AuthState {
-  user: UserOut | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-}
-
-export interface LogoutResponse {
   mensaje: string;
 }

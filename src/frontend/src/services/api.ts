@@ -9,18 +9,18 @@ import type {
   VerifyTokenResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
+  LogoutResponse,
   UserOut,
   UserCreateRequest,
   UserUpdateRequest,
-  PaginatedUsersResponse,
   UserActionResponse,
+  PaginatedUsersResponse,
   PerfilResponse,
   PerfilUpdateRequest,
   ChangePasswordRequest,
   ChangePasswordResponse,
   PreferenciasOut,
   PreferenciasUpdateRequest,
-  LogoutResponse,
 } from '../types/auth';
 
 const API_URL = '/api/autenticacin_usuarios_y_configuracin_inicial';
@@ -30,42 +30,37 @@ class ApiError extends Error {
   constructor(message: string, status: number) {
     super(message);
     this.status = status;
+    this.name = 'ApiError';
   }
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('auth_token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+    ...((options.headers as Record<string, string>) || {}),
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
   });
-
   if (!res.ok) {
-    let message = 'Error de solicitud';
+    let message = `Error ${res.status}`;
     try {
       const body = await res.json();
       message = body.detail || body.mensaje || message;
     } catch {
-      // ignore parse errors
+      // use default message
     }
     throw new ApiError(message, res.status);
   }
-
   return res.json();
 }
 
-// ─── Auth (Públicos) ───────────────────────────────────────
+// --- Public endpoints ---
 
 export function checkSetup(): Promise<SetupStatusResponse> {
   return request<SetupStatusResponse>('/auth/check-setup');
@@ -103,7 +98,7 @@ export function resetPassword(data: ResetPasswordRequest): Promise<ResetPassword
   });
 }
 
-// ─── Auth (Protegidos) ─────────────────────────────────────
+// --- Protected endpoints ---
 
 export function getMe(): Promise<UserOut> {
   return request<UserOut>('/auth/me');
@@ -115,19 +110,17 @@ export function logout(): Promise<LogoutResponse> {
   });
 }
 
-// ─── Usuarios (Protegidos - Admin) ─────────────────────────
-
-export function listUsuarios(params: {
+export function listUsuarios(params?: {
   search?: string;
   page?: number;
   page_size?: number;
 }): Promise<PaginatedUsersResponse> {
-  const qs = new URLSearchParams();
-  if (params.search) qs.set('search', params.search);
-  if (params.page !== undefined) qs.set('page', String(params.page));
-  if (params.page_size !== undefined) qs.set('page_size', String(params.page_size));
-  const queryStr = qs.toString();
-  const path = queryStr ? '/usuarios?' + queryStr : '/usuarios';
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.page !== undefined) query.set('page', String(params.page));
+  if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
+  const qs = query.toString();
+  const path = qs ? `/usuarios?${qs}` : '/usuarios';
   return request<PaginatedUsersResponse>(path);
 }
 
@@ -160,8 +153,6 @@ export function reactivateUsuario(id: number): Promise<UserActionResponse> {
     method: 'PATCH',
   });
 }
-
-// ─── Perfil (Protegidos) ───────────────────────────────────
 
 export function getPerfil(): Promise<PerfilResponse> {
   return request<PerfilResponse>('/perfil');

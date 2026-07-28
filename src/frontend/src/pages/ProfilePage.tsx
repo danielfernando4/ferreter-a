@@ -1,113 +1,88 @@
-import { useState, useEffect } from 'react';
-import { Loader2, User, Key, Settings } from 'lucide-react';
-import { getPerfil } from '../services/api';
-import type { PerfilResponse } from '../types/auth';
+import { useEffect, useState } from 'react';
+import { getPerfil, updatePerfil, updatePreferencias } from '../services/api';
 import ProfileForm from '../components/profile/ProfileForm';
 import ChangePasswordForm from '../components/profile/ChangePasswordForm';
 import PreferencesForm from '../components/profile/PreferencesForm';
-
-type Tab = 'perfil' | 'password' | 'preferencias';
+import { useAuth } from '../context/AuthContext';
+import type { UserOut, PreferenciasOut } from '../types/auth';
+import { Loader2, UserCircle, AlertTriangle } from 'lucide-react';
 
 export default function ProfilePage() {
-  const [data, setData] = useState<PerfilResponse | null>(null);
+  const { updateUser } = useAuth();
+  const [user, setUser] = useState<UserOut | null>(null);
+  const [preferencias, setPreferencias] = useState<PreferenciasOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<Tab>('perfil');
 
   useEffect(() => {
     getPerfil()
-      .then(setData)
-      .catch(err => {
-        const msg = err instanceof Error ? err.message : 'Error al cargar perfil';
-        setError(msg);
+      .then((perfil) => {
+        setUser(perfil.usuario);
+        setPreferencias(perfil.preferencias);
+        setIsLoading(false);
       })
-      .finally(() => setIsLoading(false));
+      .catch((err: any) => {
+        setError(err.message || 'Error al cargar el perfil.');
+        setIsLoading(false);
+      });
   }, []);
+
+  const handleProfileSave = async (data: { nombre_completo?: string; email?: string }) => {
+    const updatedUser = await updatePerfil(data);
+    setUser(updatedUser);
+    updateUser(updatedUser);
+  };
+
+  const handlePreferencesSave = async (data: { idioma?: string; tema_visual?: string; zona_horaria?: string }) => {
+    const updatedPref = await updatePreferencias(data);
+    setPreferencias(updatedPref);
+  };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 size={24} className="animate-spin text-slate-400" />
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-900" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-        {error}
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <p className="text-slate-600">{error}</p>
+        </div>
       </div>
     );
   }
 
-  const tabs: { id: Tab; label: string; icon: typeof User }[] = [
-    { id: 'perfil', label: 'Datos personales', icon: User },
-    { id: 'password', label: 'Contraseña', icon: Key },
-    { id: 'preferencias', label: 'Preferencias', icon: Settings },
-  ];
-
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Mi Perfil</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Gestiona tu información personal y preferencias
-        </p>
-      </div>
-
-      {/* User info card */}
-      {data && (
-        <div className="bg-white rounded-2xl shadow-sm p-6 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-xl font-bold">
-            {data.usuario.nombre_completo?.charAt(0)?.toUpperCase() || 'U'}
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">{data.usuario.nombre_completo}</h2>
-            <p className="text-sm text-slate-500">{data.usuario.email}</p>
-            <span className="inline-block mt-1 px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 capitalize">
-              {data.usuario.rol}
-            </span>
-          </div>
+    <div>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center">
+          <UserCircle className="h-6 w-6 text-slate-900" />
         </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-white rounded-2xl shadow-sm p-1">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex-1 justify-center ${
-              activeTab === tab.id
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <tab.icon size={18} />
-            {tab.label}
-          </button>
-        ))}
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Mi perfil</h1>
+          <p className="text-sm text-slate-500 mt-1">Administra tu información personal y preferencias</p>
+        </div>
       </div>
 
-      {/* Tab content */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
-        {activeTab === 'perfil' && data && (
-          <ProfileForm
-            user={data.usuario}
-            onSave={() => {
-              getPerfil().then(setData).catch(() => {});
-            }}
-          />
-        )}
-        {activeTab === 'password' && <ChangePasswordForm />}
-        {activeTab === 'preferencias' && data && (
-          <PreferencesForm
-            preferencias={data.preferencias}
-            onSave={prefs => {
-              setData(prev => prev ? { ...prev, preferencias: prefs } : prev);
-            }}
-          />
-        )}
+      <div className="space-y-6">
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          {user && <ProfileForm user={user} onSave={handleProfileSave} />}
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <ChangePasswordForm />
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          {preferencias && (
+            <PreferencesForm preferencias={preferencias} onSave={handlePreferencesSave} />
+          )}
+        </div>
       </div>
     </div>
   );

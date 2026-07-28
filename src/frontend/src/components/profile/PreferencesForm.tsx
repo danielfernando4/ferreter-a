@@ -1,67 +1,86 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { PreferenciasOut, PreferenciasUpdateRequest } from '../../types/auth';
-import { updatePreferencias } from '../../services/api';
+import type { PreferenciasOut } from '../../types/auth';
 
 interface PreferencesFormProps {
   preferencias: PreferenciasOut;
-  onSave: (prefs: PreferenciasOut) => void;
+  onSave: (data: { idioma?: string; tema_visual?: string; zona_horaria?: string }) => Promise<void>;
 }
 
-const idiomas = [
+const IDIOMAS = [
   { value: 'es', label: 'Español' },
   { value: 'en', label: 'English' },
 ];
 
-const temas = [
+const TEMAS = [
   { value: 'light', label: 'Claro' },
   { value: 'dark', label: 'Oscuro' },
 ];
 
-const zonasHorarias = [
+const ZONAS_HORARIAS = [
   { value: 'America/Mexico_City', label: 'Ciudad de México (GMT-6)' },
   { value: 'America/Monterrey', label: 'Monterrey (GMT-6)' },
-  { value: 'America/Guadalajara', label: 'Guadalajara (GMT-6)' },
   { value: 'America/Tijuana', label: 'Tijuana (GMT-8)' },
-  { value: 'America/Merida', label: 'Mérida (GMT-6)' },
-  { value: 'America/Chihuahua', label: 'Chihuahua (GMT-7)' },
+  { value: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires (GMT-3)' },
+  { value: 'America/Santiago', label: 'Santiago (GMT-4)' },
+  { value: 'America/Bogota', label: 'Bogotá (GMT-5)' },
+  { value: 'America/Lima', label: 'Lima (GMT-5)' },
+  { value: 'America/Caracas', label: 'Caracas (GMT-4)' },
 ];
 
 export default function PreferencesForm({ preferencias, onSave }: PreferencesFormProps) {
-  const [idioma, setIdioma] = useState(preferencias.idioma);
-  const [tema, setTema] = useState(preferencias.tema_visual);
-  const [zonaHoraria, setZonaHoraria] = useState(preferencias.zona_horaria);
+  const [idioma, setIdioma] = useState('es');
+  const [temaVisual, setTemaVisual] = useState('light');
+  const [zonaHoraria, setZonaHoraria] = useState('America/Mexico_City');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  useEffect(() => {
+    if (preferencias) {
+      setIdioma(preferencias.idioma || 'es');
+      setTemaVisual(preferencias.tema_visual || 'light');
+      setZonaHoraria(preferencias.zona_horaria || 'America/Mexico_City');
+    }
+  }, [preferencias]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess(false);
+
+    const data: { idioma?: string; tema_visual?: string; zona_horaria?: string } = {};
+    if (idioma !== preferencias.idioma) data.idioma = idioma;
+    if (temaVisual !== preferencias.tema_visual) data.tema_visual = temaVisual;
+    if (zonaHoraria !== preferencias.zona_horaria) data.zona_horaria = zonaHoraria;
+    if (Object.keys(data).length === 0) {
+      setError('No hay cambios para guardar.');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const data: PreferenciasUpdateRequest = {};
-      if (idioma !== preferencias.idioma) data.idioma = idioma;
-      if (tema !== preferencias.tema_visual) data.tema_visual = tema;
-      if (zonaHoraria !== preferencias.zona_horaria) data.zona_horaria = zonaHoraria;
-      if (Object.keys(data).length === 0) {
-        onSave(preferencias);
-        return;
-      }
-      const updated = await updatePreferencias(data);
-      onSave(updated);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al guardar preferencias';
-      setError(msg);
+      await onSave(data);
+      setSuccess(true);
+    } catch (err: any) {
+      setError(err.message || 'Error al guardar las preferencias.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <h3 className="text-lg font-semibold text-slate-900">Preferencias</h3>
+
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+        <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-200">
           {error}
+        </div>
+      )}
+      {success && (
+        <div className="bg-green-50 text-green-600 text-sm px-4 py-3 rounded-xl border border-green-200">
+          Preferencias actualizadas exitosamente.
         </div>
       )}
 
@@ -69,37 +88,44 @@ export default function PreferencesForm({ preferencias, onSave }: PreferencesFor
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Idioma</label>
         <select
           value={idioma}
-          onChange={e => setIdioma(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm bg-white"
+          onChange={(e) => setIdioma(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all bg-white"
         >
-          {idiomas.map(op => (
-            <option key={op.value} value={op.value}>{op.label}</option>
+          {IDIOMAS.map((i) => (
+            <option key={i.value} value={i.value}>{i.label}</option>
           ))}
         </select>
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Tema visual</label>
-        <select
-          value={tema}
-          onChange={e => setTema(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm bg-white"
-        >
-          {temas.map(op => (
-            <option key={op.value} value={op.value}>{op.label}</option>
+        <div className="flex gap-3">
+          {TEMAS.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setTemaVisual(t.value)}
+              className={`flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                temaVisual === t.value
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'
+              }`}
+            >
+              {t.label}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Zona horaria</label>
         <select
           value={zonaHoraria}
-          onChange={e => setZonaHoraria(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm bg-white"
+          onChange={(e) => setZonaHoraria(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all bg-white"
         >
-          {zonasHorarias.map(op => (
-            <option key={op.value} value={op.value}>{op.label}</option>
+          {ZONAS_HORARIAS.map((z) => (
+            <option key={z.value} value={z.value}>{z.label}</option>
           ))}
         </select>
       </div>
@@ -107,9 +133,9 @@ export default function PreferencesForm({ preferencias, onSave }: PreferencesFor
       <button
         type="submit"
         disabled={isLoading}
-        className="py-2.5 px-6 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
       >
-        {isLoading && <Loader2 size={18} className="animate-spin" />}
+        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
         {isLoading ? 'Guardando...' : 'Guardar preferencias'}
       </button>
     </form>

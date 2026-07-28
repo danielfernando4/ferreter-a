@@ -1,35 +1,43 @@
-import { useState, type FormEvent } from 'react';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { useState } from 'react';
 import { resetPassword } from '../../services/api';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 interface ResetPasswordFormProps {
   token: string;
-  onSuccess?: () => void;
+  onSuccess: () => void;
 }
 
 export default function ResetPasswordForm({ token, onSuccess }: ResetPasswordFormProps) {
+  const navigate = useNavigate();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
+    if (!newPassword.trim() || !confirmPassword.trim()) {
+      setError('Todos los campos son obligatorios.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
     if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
+      setError('Las contraseñas no coinciden.');
       return;
     }
 
     setIsLoading(true);
     try {
       await resetPassword({ token, new_password: newPassword, confirm_password: confirmPassword });
-      onSuccess?.();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al restablecer la contraseña';
-      setError(msg);
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Error al restablecer la contraseña.');
     } finally {
       setIsLoading(false);
     }
@@ -38,7 +46,7 @@ export default function ResetPasswordForm({ token, onSuccess }: ResetPasswordFor
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+        <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-200">
           {error}
         </div>
       )}
@@ -52,18 +60,18 @@ export default function ResetPasswordForm({ token, onSuccess }: ResetPasswordFor
             id="new-password"
             type={showPassword ? 'text' : 'password'}
             value={newPassword}
-            onChange={e => setNewPassword(e.target.value)}
+            onChange={(e) => setNewPassword(e.target.value)}
             placeholder="Mínimo 6 caracteres"
-            required
-            minLength={6}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm pr-10"
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all pr-10"
+            autoComplete="new-password"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            tabIndex={-1}
           >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
       </div>
@@ -76,19 +84,19 @@ export default function ResetPasswordForm({ token, onSuccess }: ResetPasswordFor
           id="confirm-password"
           type="password"
           value={confirmPassword}
-          onChange={e => setConfirmPassword(e.target.value)}
+          onChange={(e) => setConfirmPassword(e.target.value)}
           placeholder="Repite la contraseña"
-          required
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+          autoComplete="new-password"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full py-2.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
       >
-        {isLoading && <Loader2 size={18} className="animate-spin" />}
+        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
         {isLoading ? 'Restableciendo...' : 'Restablecer contraseña'}
       </button>
     </form>

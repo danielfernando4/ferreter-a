@@ -1,17 +1,24 @@
-import { createContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import type { UserOut, AuthState, LoginRequest } from '../types/auth';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import type { UserOut } from '../types/auth';
 import * as api from '../services/api';
 
-interface AuthContextValue extends AuthState {
-  login: (data: LoginRequest) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUser: (user: UserOut) => void;
-  checkSetup: () => Promise<boolean>;
+interface AuthState {
+  user: UserOut | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
   setupRequired: boolean;
-  isCheckingSetup: boolean;
+  checkingSetup: boolean;
 }
 
-export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+interface AuthContextType extends AuthState {
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
+  logout: () => Promise<void>;
+  updateUser: (user: UserOut) => void;
+  refreshUser: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -19,58 +26,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     token: localStorage.getItem('auth_token'),
     isAuthenticated: false,
     isLoading: true,
+    setupRequired: false,
+    checkingSetup: true,
   });
-  const [setupRequired, setSetupRequired] = useState(false);
-  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
 
-  // Check setup status on mount
+  // Check setup status first, then validate token
   useEffect(() => {
     async function init() {
       try {
         const setupStatus = await api.checkSetup();
-        if (!setupStatus.setup_completed && !setupStatus.admin_exists) {
-          setSetupRequired(true);
-          setIsCheckingSetup(false);
-          setState(prev => ({ ...prev, isLoading: false }));
+        if (!setupStatus.setup_completed || !setupStatus.admin_exists) {
+          setState((prev) => ({
+            ...prev,
+            setupRequired: true,
+            checkingSetup: false,
+            isLoading: false,
+          }));
           return;
         }
       } catch {
         // If check fails, assume setup is done
       }
-      setSetupRequired(false);
-      setIsCheckingSetup(false);
 
-      // If we have a token, try to authenticate
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-        try {
-          const user = await api.getMe();
-          setState({
-            user,
-            token,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-          return;
-        } catch {
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('auth_user');
-        }
+      // Setup is done, check token
+      const storedToken = localStorage.getItem('auth_token');
+      if (!storedToken) {
+        setState((prev) => ({
+          ...prev,
+          checkingSetup: false,
+          isLoading: false,
+        }));
+        return;
       }
-      setState(prev => ({ ...prev, isLoading: false }));
+
+      try {
+        const user = await api.getMe();
+        setState({
+          user,
+          token: storedToken,
+          isAuthenticated: true,
+          isLoading: false,
+          setupRequired: false,
+          checkingSetup: false,
+        });
+      } catch {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_remember');
+        setState({
+          user: null,
+          token: null,
+          isAuthenticated: false,
+          isLoading: false,
+          setupRequired: false,
+          checkingSetup: false,
+        });
+      }
     }
     init();
   }, []);
 
-  const login = useCallback(async (data: LoginRequest) => {
-    const res = await api.login(data);
+  const login = useCallback(async (email: string, password: string, remember = false) => {
+    const res = await api.login({ email, password, remember });
     localStorage.setItem('auth_token', res.token);
-    localStorage.setItem('auth_user', JSON.stringify(res.usuario));
+    if (remember) {
+      localStorage.setItem('auth_remember', 'true');
+    }
     setState({
       user: res.usuario,
       token: res.token,
       isAuthenticated: true,
       isLoading: false,
+      setupRequired: false,
+      checkingSetup: false,
     });
   }, []);
 
@@ -81,26 +108,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ignore
     }
     localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_remember');
     setState({
       user: null,
       token: null,
       isAuthenticated: false,
       isLoading: false,
+      setupRequired: false,
+      checkingSetup: false,
     });
   }, []);
 
   const updateUser = useCallback((user: UserOut) => {
-    localStorage.setItem('auth_user', JSON.stringify(user));
-    setState(prev => ({ ...prev, user }));
+    setState((prev) => ({ ...prev, user }));
   }, []);
 
-  const checkSetupStatus = useCallback(async () => {
+  const refreshUser = useCallback(async () => {
     try {
-      const setupStatus = await api.checkSetup();
-      return setupStatus.setup_completed && setupStatus.admin_exists;
+      const user = await api.getMe();
+      setState((prev) => ({ ...prev, user }));
     } catch {
-      return true;
+      // ignore
     }
   }, []);
 
@@ -111,12 +139,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         updateUser,
-        checkSetup: checkSetupStatus,
-        setupRequired,
-        isCheckingSetup,
+        refreshUser,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
+
+export function useAuth(): AuthContextType {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return ctx;
+}
+
+export default AuthContext;

@@ -1,21 +1,17 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
-# ───── Esquemas de Rol ─────
+# ─── Enumeración de roles ───────────────────────────────────────────────
+ROLES_VALIDOS = ["administrador", "vendedor", "almacen"]
 
-class RolOut(BaseModel):
-    id: int
-    nombre: str
-    descripcion: str
 
+# ─── Esquemas de Usuario ────────────────────────────────────────────────
+class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-
-# ───── Esquemas de Usuario ─────
-
-class UserOut(BaseModel):
     id: int
     nombre_completo: str
     email: str
@@ -23,8 +19,6 @@ class UserOut(BaseModel):
     activo: bool
     fecha_registro: datetime
     ultimo_acceso: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
 
     @field_validator("rol", mode="before")
     @classmethod
@@ -38,13 +32,8 @@ class UserOut(BaseModel):
     def extract_fecha_registro(cls, v):
         if v is None:
             return v
-        return v
-
-    @field_validator("ultimo_acceso", mode="before")
-    @classmethod
-    def extract_ultimo_acceso(cls, v):
-        if v is None:
-            return None
+        if hasattr(v, "isoformat"):
+            return v
         return v
 
 
@@ -52,17 +41,30 @@ class UserCreateRequest(BaseModel):
     nombre_completo: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    rol: str = Field(..., pattern="^(administrador|vendedor|almacen)$")
+    rol: str
+
+    @field_validator("rol")
+    @classmethod
+    def validate_rol(cls, v):
+        if v not in ROLES_VALIDOS:
+            raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(ROLES_VALIDOS)}")
+        return v
 
 
 class UserUpdateRequest(BaseModel):
     nombre_completo: Optional[str] = Field(None, min_length=1, max_length=150)
     email: Optional[EmailStr] = None
-    rol: Optional[str] = Field(None, pattern="^(administrador|vendedor|almacen)$")
+    rol: Optional[str] = None
+
+    @field_validator("rol")
+    @classmethod
+    def validate_rol(cls, v):
+        if v is not None and v not in ROLES_VALIDOS:
+            raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(ROLES_VALIDOS)}")
+        return v
 
 
-# ───── Esquemas de Autenticación ─────
-
+# ─── Esquemas de Autenticación ──────────────────────────────────────────
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -76,21 +78,15 @@ class LoginResponse(BaseModel):
     usuario: UserOut
 
 
-# ───── Esquemas de Setup ─────
-
-class SetupStatusResponse(BaseModel):
-    setup_completed: bool
-    admin_exists: bool
-
-
+# ─── Esquemas de Setup ─────────────────────────────────────────────────
 class SetupRequest(BaseModel):
     nombre_completo: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    negocio_nombre: str = Field(..., min_length=1, max_length=200)
-    negocio_direccion: str = Field(..., min_length=1, max_length=300)
-    negocio_rfc: str = Field(..., min_length=1, max_length=50)
-    negocio_telefono: Optional[str] = Field(None, max_length=50)
+    negocio_nombre: str = Field(..., min_length=1)
+    negocio_direccion: str = Field(..., min_length=1)
+    negocio_rfc: str = Field(..., min_length=1)
+    negocio_telefono: Optional[str] = None
 
 
 class SetupResponse(BaseModel):
@@ -98,19 +94,26 @@ class SetupResponse(BaseModel):
     usuario: UserOut
 
 
-# ───── Esquemas de Preferencias ─────
+class SetupStatusResponse(BaseModel):
+    setup_completed: bool
+    admin_exists: bool
 
+
+# ─── Esquemas de Preferencias ──────────────────────────────────────────
 class PreferenciasOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     idioma: str = "es"
     tema_visual: str = "light"
     zona_horaria: str = "America/Mexico_City"
 
-    model_config = ConfigDict(from_attributes=True)
-
     @field_validator("zona_horaria", mode="before")
     @classmethod
-    def extract_zona_horaria(cls, v):
-        return v or "America/Mexico_City"
+    def map_configuracion_regional(cls, v):
+        # Map from configuracion_regional to zona_horaria for schema compat
+        if v and v == "es-MX":
+            return "America/Mexico_City"
+        return v if v else "America/Mexico_City"
 
 
 class PreferenciasUpdateRequest(BaseModel):
@@ -119,8 +122,7 @@ class PreferenciasUpdateRequest(BaseModel):
     zona_horaria: Optional[str] = None
 
 
-# ───── Esquemas de Recuperación ─────
-
+# ─── Esquemas de Recuperación ──────────────────────────────────────────
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -154,8 +156,7 @@ class ChangePasswordResponse(BaseModel):
     mensaje: str
 
 
-# ───── Esquemas de Respuesta Genéricos ─────
-
+# ─── Esquemas de Respuesta Genéricos ───────────────────────────────────
 class PaginatedUsersResponse(BaseModel):
     items: List[UserOut]
     total: int

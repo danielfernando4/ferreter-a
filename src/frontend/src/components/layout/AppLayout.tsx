@@ -4,14 +4,14 @@ import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 
 export default function AppLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col min-w-0">
-        <Navbar onMenuClick={() => setSidebarOpen(prev => !prev)} />
-        <main className="flex-1 overflow-auto p-4 lg:p-6">
+    <div className="flex min-h-screen bg-slate-50">
+      {sidebarOpen && <Sidebar />}
+      <div className="flex-1 flex flex-col">
+        <Navbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <main className="flex-1 p-6">
           <Outlet />
         </main>
       </div>

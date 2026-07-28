@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import (
+    Column, Integer, String, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
+)
 from sqlalchemy.orm import relationship
+
 from database import Base
 
 
@@ -9,7 +12,7 @@ class Rol(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(50), unique=True, nullable=False)
-    descripcion = Column(String(255), nullable=False)
+    descripcion = Column(Text, nullable=False)
 
     usuarios = relationship("Usuario", back_populates="rol")
 
@@ -22,20 +25,12 @@ class Usuario(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre_completo = Column(String(150), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
+    email = Column(String(255), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     activo = Column(Boolean, default=True, nullable=False)
     rol_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
-    fecha_creacion = Column(
-        DateTime, default=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False
-    )
-    fecha_actualizacion = Column(
-        DateTime,
-        default=datetime.now(timezone.utc),
-        onupdate=datetime.now(timezone.utc),
-        server_default="CURRENT_TIMESTAMP",
-        nullable=False,
-    )
+    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False)
+    fecha_actualizacion = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False)
     ultimo_acceso = Column(DateTime, nullable=True)
 
     rol = relationship("Rol", back_populates="usuarios")
@@ -44,7 +39,7 @@ class Usuario(Base):
     tokens_restablecimiento = relationship("TokenRestablecimiento", back_populates="usuario")
 
     def __repr__(self):
-        return f"<Usuario {self.nombre_completo}>"
+        return f"<Usuario {self.email}>"
 
 
 class ConfiguracionNegocio(Base):
@@ -55,11 +50,9 @@ class ConfiguracionNegocio(Base):
     direccion = Column(String(300), nullable=False)
     datos_fiscales = Column(String(300), nullable=False)
     telefono = Column(String(50), nullable=True)
-    email_contacto = Column(String(150), nullable=True)
+    email_contacto = Column(String(255), nullable=True)
     setup_completado = Column(Boolean, default=False, nullable=False)
-    fecha_creacion = Column(
-        DateTime, default=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False
-    )
+    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False)
 
     def __repr__(self):
         return f"<ConfiguracionNegocio {self.nombre}>"
@@ -88,9 +81,7 @@ class TokenSesion(Base):
     token_hash = Column(String(255), unique=True, nullable=False)
     es_persistente = Column(Boolean, default=False, nullable=False)
     fecha_expiracion = Column(DateTime, nullable=False)
-    fecha_creacion = Column(
-        DateTime, default=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False
-    )
+    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False)
     activo = Column(Boolean, default=True, nullable=False)
 
     usuario = relationship("Usuario", back_populates="tokens_sesion")
@@ -107,9 +98,7 @@ class TokenRestablecimiento(Base):
     token_hash = Column(String(255), unique=True, nullable=False)
     fecha_expiracion = Column(DateTime, nullable=False)
     utilizado = Column(Boolean, default=False, nullable=False)
-    fecha_creacion = Column(
-        DateTime, default=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False
-    )
+    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), server_default="CURRENT_TIMESTAMP", nullable=False)
 
     usuario = relationship("Usuario", back_populates="tokens_restablecimiento")
 

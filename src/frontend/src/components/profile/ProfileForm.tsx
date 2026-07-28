@@ -1,49 +1,62 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { UserOut } from '../../types/auth';
-import { updatePerfil } from '../../services/api';
-import { useAuth } from '../../hooks/useAuth';
 
 interface ProfileFormProps {
   user: UserOut;
-  onSave: () => void;
+  onSave: (data: { nombre_completo?: string; email?: string }) => Promise<void>;
 }
 
 export default function ProfileForm({ user, onSave }: ProfileFormProps) {
-  const { updateUser } = useAuth();
-  const [nombre, setNombre] = useState(user.nombre_completo);
-  const [email, setEmail] = useState(user.email);
+  const [nombreCompleto, setNombreCompleto] = useState('');
+  const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  useEffect(() => {
+    if (user) {
+      setNombreCompleto(user.nombre_completo || '');
+      setEmail(user.email || '');
+    }
+  }, [user]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess(false);
+
+    const data: { nombre_completo?: string; email?: string } = {};
+    if (nombreCompleto.trim() !== user.nombre_completo) data.nombre_completo = nombreCompleto.trim();
+    if (email.trim() !== user.email) data.email = email.trim();
+    if (Object.keys(data).length === 0) {
+      setError('No hay cambios para guardar.');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const data: { nombre_completo?: string; email?: string } = {};
-      if (nombre !== user.nombre_completo) data.nombre_completo = nombre;
-      if (email !== user.email) data.email = email;
-      if (Object.keys(data).length === 0) {
-        onSave();
-        return;
-      }
-      const updated = await updatePerfil(data);
-      updateUser(updated);
-      onSave();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al actualizar perfil';
-      setError(msg);
+      await onSave(data);
+      setSuccess(true);
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar el perfil.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <h3 className="text-lg font-semibold text-slate-900">Datos personales</h3>
+
       {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+        <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-200">
           {error}
+        </div>
+      )}
+      {success && (
+        <div className="bg-green-50 text-green-600 text-sm px-4 py-3 rounded-xl border border-green-200">
+          Perfil actualizado exitosamente.
         </div>
       )}
 
@@ -51,10 +64,9 @@ export default function ProfileForm({ user, onSave }: ProfileFormProps) {
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre completo</label>
         <input
           type="text"
-          value={nombre}
-          onChange={e => setNombre(e.target.value)}
-          required
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
+          value={nombreCompleto}
+          onChange={(e) => setNombreCompleto(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
         />
       </div>
 
@@ -63,18 +75,17 @@ export default function ProfileForm({ user, onSave }: ProfileFormProps) {
         <input
           type="email"
           value={email}
-          onChange={e => setEmail(e.target.value)}
-          required
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 outline-none text-sm"
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="py-2.5 px-6 rounded-xl bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
       >
-        {isLoading && <Loader2 size={18} className="animate-spin" />}
+        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
         {isLoading ? 'Guardando...' : 'Guardar cambios'}
       </button>
     </form>

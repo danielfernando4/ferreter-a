@@ -1,10 +1,9 @@
-// ─── Tipos de Usuario ────────────────────────────────────────────────────────
-
+// --- Esquemas de Usuario ---
 export interface UserOut {
   id: number;
   nombre_completo: string;
   email: string;
-  rol: string;
+  rol: string; // "administrador" | "vendedor" | "almacen"
   activo: boolean;
   fecha_registro: string;
   ultimo_acceso: string | null;
@@ -23,8 +22,7 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
-// ─── Tipos de Autenticación ──────────────────────────────────────────────────
-
+// --- Esquemas de Autenticación ---
 export interface LoginRequest {
   email: string;
   password: string;
@@ -38,8 +36,7 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
-// ─── Tipos de Setup ──────────────────────────────────────────────────────────
-
+// --- Esquemas de Setup ---
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -60,8 +57,7 @@ export interface SetupStatusResponse {
   admin_exists: boolean;
 }
 
-// ─── Tipos de Preferencias ───────────────────────────────────────────────────
-
+// --- Esquemas de Preferencias ---
 export interface PreferenciasOut {
   idioma: string;
   tema_visual: string;
@@ -74,19 +70,13 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
-// ─── Tipos de Recuperación de Contraseña ─────────────────────────────────────
-
+// --- Esquemas de Recuperación ---
 export interface ForgotPasswordRequest {
   email: string;
 }
 
 export interface ForgotPasswordResponse {
   mensaje: string;
-}
-
-export interface VerifyTokenResponse {
-  valido: boolean;
-  email: string;
 }
 
 export interface ResetPasswordRequest {
@@ -99,6 +89,11 @@ export interface ResetPasswordResponse {
   mensaje: string;
 }
 
+export interface VerifyTokenResponse {
+  valido: boolean;
+  email: string;
+}
+
 export interface ChangePasswordRequest {
   current_password: string;
   new_password: string;
@@ -109,14 +104,18 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
-// ─── Tipos de Respuesta Genéricos ────────────────────────────────────────────
-
+// --- Esquemas de Respuesta Genéricos ---
 export interface PaginatedUsersResponse {
   items: UserOut[];
   total: number;
   page: number;
   page_size: number;
   total_pages: number;
+}
+
+export interface PerfilUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
 }
 
 export interface UserActionResponse {
@@ -133,8 +132,7 @@ export interface LogoutResponse {
   mensaje: string;
 }
 
-// ─── Tipo para el contexto de autenticación ──────────────────────────────────
-
+// --- Auth State ---
 export interface AuthState {
   user: UserOut | null;
   token: string | null;

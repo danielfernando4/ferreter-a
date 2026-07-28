@@ -1,29 +1,24 @@
-import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { Navigate, useLocation } from 'react-router-dom';
-import LoadingState from '../LoadingState';
+import { LoadingState } from '../LoadingState';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: string;
 }
 
-export default function ProtectedRoute({
-  children,
-  requiredRole,
-}: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const location = useLocation();
 
   if (isLoading) {
     return <LoadingState message="Verificando sesión..." />;
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user && user.rol !== requiredRole) {
+  if (requiredRole && user?.rol !== requiredRole && user?.rol !== 'administrador') {
     return <Navigate to="/" replace />;
   }
 

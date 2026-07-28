@@ -1,88 +1,105 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuthContext } from './context/AuthContext';
-import ProtectedRoute from './components/auth/ProtectedRoute';
-import AppLayout from './components/layout/AppLayout';
-import LoadingState from './components/LoadingState';
-import HomePage from './pages/HomePage';
-import SetupWizardPage from './pages/SetupWizardPage';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { AppLayout } from './components/layout/AppLayout';
+import { LoadingState } from './components/LoadingState';
+import { useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
+import SetupWizardPage from './pages/SetupWizardPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import HomePage from './pages/HomePage';
 import UserListPage from './pages/UserListPage';
 import CreateUserPage from './pages/CreateUserPage';
 import EditUserPage from './pages/EditUserPage';
 import ProfilePage from './pages/ProfilePage';
 
-function AppContent() {
-  const { isAuthenticated, isLoading, setupRequired, checkingSetup } = useAuthContext();
+function RootRedirect() {
+  const { isAuthenticated, isLoading, setupRequired, isCheckingSetup } = useAuth();
 
-  if (checkingSetup || isLoading) {
+  if (isLoading || isCheckingSetup) {
     return <LoadingState message="Cargando..." />;
   }
 
-  // If setup is required, redirect to setup wizard
   if (setupRequired) {
+    return <Navigate to="/setup-wizard" replace />;
+  }
+
+  if (isAuthenticated) {
     return (
-      <Routes>
-        <Route path="/setup-wizard" element={<SetupWizardPage />} />
-        <Route path="*" element={<Navigate to="/setup-wizard" replace />} />
-      </Routes>
+      <AppLayout>
+        <HomePage />
+      </AppLayout>
     );
   }
 
-  // If not authenticated, show public routes
-  if (!isAuthenticated) {
-    return (
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    );
-  }
-
-  // Authenticated routes with layout
-  return (
-    <AppLayout>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route
-          path="/usuarios"
-          element={
-            <ProtectedRoute requiredRole="administrador">
-              <UserListPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/usuarios/nuevo"
-          element={
-            <ProtectedRoute requiredRole="administrador">
-              <CreateUserPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/usuarios/:id/editar"
-          element={
-            <ProtectedRoute requiredRole="administrador">
-              <EditUserPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/perfil" element={<ProfilePage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AppLayout>
-  );
+  return <Navigate to="/login" replace />;
 }
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppContent />
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/setup-wizard" element={<SetupWizardPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          {/* Protected Routes */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <RootRedirect />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/usuarios"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <UserListPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/usuarios/nuevo"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <CreateUserPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/usuarios/:id/editar"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <EditUserPage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/perfil"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <ProfilePage />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   );

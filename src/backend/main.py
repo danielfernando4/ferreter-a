@@ -6,6 +6,7 @@ from autenticacin_usuarios_y_configuracin_inicial.routes import router
 
 app = FastAPI(title="Ferretera API", version="1.0.0")
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,15 +15,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router, prefix='/api/autenticacin_usuarios_y_configuracin_inicial')
+# Registrar routers
+app.include_router(router, prefix="/api/autenticacin_usuarios_y_configuracin_inicial")
 
 
-@app.on_event('startup')
+@app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 
-@app.get('/api/health')
+@app.get("/api/health")
 async def health():
-    return {'status': 'ok'}
+    return {"status": "ok"}

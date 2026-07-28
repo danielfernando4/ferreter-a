@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
@@ -17,39 +17,57 @@ class UserOut(BaseModel):
     fecha_registro: datetime
     ultimo_acceso: Optional[datetime] = None
 
+    @field_validator("rol", mode="before")
+    @classmethod
+    def extract_rol_name(cls, v):
+        return v.nombre if hasattr(v, "nombre") else str(v)
+
+    @field_validator("fecha_registro", mode="before")
+    @classmethod
+    def extract_fecha_registro(cls, v):
+        if hasattr(v, "fecha_creacion"):
+            return v.fecha_creacion
+        return v
+
 
 class UserCreateRequest(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     nombre_completo: str
-    email: str
+    email: EmailStr
     password: str
     rol: str
 
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v):
+        if len(v) < 6:
+            raise ValueError("La contraseña debe tener al menos 6 caracteres")
+        return v
+
     @field_validator("rol")
     @classmethod
-    def validate_rol(cls, v: str) -> str:
-        allowed = ["administrador", "vendedor", "almacen"]
-        if v.lower() not in allowed:
-            raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(allowed)}")
-        return v.lower()
+    def validate_rol(cls, v):
+        allowed = {"administrador", "vendedor", "almacen"}
+        if v not in allowed:
+            raise ValueError(
+                f"Rol inválido. Debe ser uno de: {', '.join(allowed)}"
+            )
+        return v
 
 
 class UserUpdateRequest(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     nombre_completo: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     rol: Optional[str] = None
 
     @field_validator("rol")
     @classmethod
-    def validate_rol(cls, v: Optional[str]) -> Optional[str]:
+    def validate_rol(cls, v):
         if v is not None:
-            allowed = ["administrador", "vendedor", "almacen"]
-            if v.lower() not in allowed:
-                raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(allowed)}")
-            return v.lower()
+            allowed = {"administrador", "vendedor", "almacen"}
+            if v not in allowed:
+                raise ValueError(
+                    f"Rol inválido. Debe ser uno de: {', '.join(allowed)}"
+                )
         return v
 
 
@@ -72,12 +90,19 @@ class LoginResponse(BaseModel):
 
 class SetupRequest(BaseModel):
     nombre_completo: str
-    email: str
+    email: EmailStr
     password: str
     negocio_nombre: str
     negocio_direccion: str
     negocio_rfc: str
     negocio_telefono: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v):
+        if len(v) < 6:
+            raise ValueError("La contraseña debe tener al menos 6 caracteres")
+        return v
 
 
 class SetupResponse(BaseModel):
@@ -99,6 +124,27 @@ class PreferenciasOut(BaseModel):
     tema_visual: str = "light"
     zona_horaria: str = "America/Mexico_City"
 
+    @field_validator("idioma", mode="before")
+    @classmethod
+    def extract_idioma(cls, v):
+        if hasattr(v, "idioma"):
+            return v.idioma
+        return v or "es"
+
+    @field_validator("tema_visual", mode="before")
+    @classmethod
+    def extract_tema(cls, v):
+        if hasattr(v, "tema_visual"):
+            return v.tema_visual
+        return v or "light"
+
+    @field_validator("zona_horaria", mode="before")
+    @classmethod
+    def extract_zona(cls, v):
+        if hasattr(v, "configuracion_regional"):
+            return v.configuracion_regional
+        return v or "America/Mexico_City"
+
 
 class PreferenciasUpdateRequest(BaseModel):
     idioma: Optional[str] = None
@@ -106,10 +152,10 @@ class PreferenciasUpdateRequest(BaseModel):
     zona_horaria: Optional[str] = None
 
 
-# ─── Esquemas de Recuperación de Contraseña ─────────────────────────────────
+# ─── Esquemas de Recuperación ───────────────────────────────────────────────
 
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 
 class ForgotPasswordResponse(BaseModel):
@@ -126,6 +172,13 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
     confirm_password: str
 
+    @field_validator("new_password")
+    @classmethod
+    def password_min_length(cls, v):
+        if len(v) < 6:
+            raise ValueError("La contraseña debe tener al menos 6 caracteres")
+        return v
+
 
 class ResetPasswordResponse(BaseModel):
     mensaje: str
@@ -136,6 +189,13 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
     confirm_password: str
 
+    @field_validator("new_password")
+    @classmethod
+    def password_min_length(cls, v):
+        if len(v) < 6:
+            raise ValueError("La contraseña debe tener al menos 6 caracteres")
+        return v
+
 
 class ChangePasswordResponse(BaseModel):
     mensaje: str
@@ -143,8 +203,12 @@ class ChangePasswordResponse(BaseModel):
 
 # ─── Esquemas de Respuesta Genéricos ────────────────────────────────────────
 
+class LogoutResponse(BaseModel):
+    mensaje: str
+
+
 class PaginatedUsersResponse(BaseModel):
-    items: list[UserOut]
+    items: List[UserOut]
     total: int
     page: int
     page_size: int
@@ -159,7 +223,3 @@ class UserActionResponse(BaseModel):
 class PerfilResponse(BaseModel):
     usuario: UserOut
     preferencias: PreferenciasOut
-
-
-class LogoutResponse(BaseModel):
-    mensaje: str

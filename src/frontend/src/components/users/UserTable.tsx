@@ -1,20 +1,27 @@
-import { Edit2, UserX, UserCheck, Shield } from 'lucide-react';
-import { UserOut } from '../../services/api';
+import { Pencil, UserX, UserCheck } from 'lucide-react';
+import type { UserOut } from '../../types/auth';
 
 interface UserTableProps {
   usuarios: UserOut[];
-  onEdit: (user: UserOut) => void;
-  onDeactivate: (user: UserOut) => void;
-  onReactivate?: (user: UserOut) => void;
+  onEdit: (id: number) => void;
+  onDeactivate: (id: number, name: string) => void;
+  onReactivate: (id: number) => void;
 }
 
-const rolColors: Record<string, string> = {
-  administrador: 'bg-purple-100 text-purple-700',
-  vendedor: 'bg-blue-100 text-blue-700',
-  almacen: 'bg-green-100 text-green-700',
-};
+function getRolBadgeColor(rol: string): string {
+  switch (rol) {
+    case 'administrador':
+      return 'bg-purple-100 text-purple-700';
+    case 'vendedor':
+      return 'bg-blue-100 text-blue-700';
+    case 'almacen':
+      return 'bg-amber-100 text-amber-700';
+    default:
+      return 'bg-slate-100 text-slate-700';
+  }
+}
 
-export default function UserTable({
+export function UserTable({
   usuarios,
   onEdit,
   onDeactivate,
@@ -22,8 +29,8 @@ export default function UserTable({
 }: UserTableProps) {
   if (usuarios.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-500 text-sm">
-        No hay usuarios registrados
+      <div className="text-center py-12 text-slate-500">
+        No se encontraron usuarios
       </div>
     );
   }
@@ -41,63 +48,63 @@ export default function UserTable({
           </tr>
         </thead>
         <tbody>
-          {usuarios.map((user) => (
+          {usuarios.map((usuario) => (
             <tr
-              key={user.id}
+              key={usuario.id}
               className="border-b border-slate-100 hover:bg-slate-50 transition-all"
             >
-              <td className="py-3 px-4 text-slate-900 font-medium">
-                {user.nombre_completo}
+              <td className="py-3 px-4 font-medium text-slate-900">
+                {usuario.nombre_completo}
               </td>
-              <td className="py-3 px-4 text-slate-600">{user.email}</td>
+              <td className="py-3 px-4 text-slate-600">{usuario.email}</td>
               <td className="py-3 px-4">
                 <span
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${
-                    rolColors[user.rol] || 'bg-slate-100 text-slate-700'
-                  }`}
+                  className={`inline-block px-3 py-1 rounded-2xl text-xs font-medium capitalize ${getRolBadgeColor(
+                    usuario.rol
+                  )}`}
                 >
-                  <Shield size={12} />
-                  {user.rol}
+                  {usuario.rol}
                 </span>
               </td>
               <td className="py-3 px-4">
                 <span
-                  className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${
-                    user.activo
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
+                  className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                    usuario.activo ? 'text-green-600' : 'text-red-500'
                   }`}
                 >
-                  {user.activo ? 'Activo' : 'Inactivo'}
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      usuario.activo ? 'bg-green-500' : 'bg-red-400'
+                    }`}
+                  />
+                  {usuario.activo ? 'Activo' : 'Inactivo'}
                 </span>
               </td>
-              <td className="py-3 px-4 text-right">
-                <div className="flex items-center justify-end gap-1">
+              <td className="py-3 px-4">
+                <div className="flex items-center justify-end gap-2">
                   <button
-                    onClick={() => onEdit(user)}
-                    className="p-2 rounded-xl hover:bg-blue-50 text-slate-500 hover:text-blue-600 transition-all"
+                    onClick={() => onEdit(usuario.id)}
+                    className="p-2 rounded-2xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
                     title="Editar"
                   >
-                    <Edit2 size={16} />
+                    <Pencil size={16} />
                   </button>
-                  {user.activo ? (
+                  {usuario.activo ? (
                     <button
-                      onClick={() => onDeactivate(user)}
-                      className="p-2 rounded-xl hover:bg-red-50 text-slate-500 hover:text-red-600 transition-all"
+                      onClick={() => onDeactivate(usuario.id, usuario.nombre_completo)}
+                      className="p-2 rounded-2xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
                       title="Desactivar"
                     >
                       <UserX size={16} />
                     </button>
                   ) : (
-                    onReactivate && (
-                      <button
-                        onClick={() => onReactivate(user)}
-                        className="p-2 rounded-xl hover:bg-green-50 text-slate-500 hover:text-green-600 transition-all"
-                        title="Reactivar"
-                      >
-                        <UserCheck size={16} />
-                      </button>
-                    )
+                    <button
+                      onClick={() => onReactivate(usuario.id)}
+                      className="p-2 rounded-2xl text-slate-400 hover:text-green-600 hover:bg-green-50 transition-all"
+                      title="Reactivar"
+                    >
+                      <UserCheck size={16} />
+                    </button>
                   )}
                 </div>
               </td>

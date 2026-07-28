@@ -1,134 +1,120 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { UserOut, AuthState } from '../services/api';
-import { getMe, loginApi, logoutApi, checkSetupStatus, LoginRequest } from '../services/api';
+import {
+  createContext,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from 'react';
+import type { UserOut } from '../types/auth';
+import { getMe, checkSetupStatus } from '../services/api';
 
-interface AuthContextType extends AuthState {
-  login: (email: string, password: string, remember?: boolean) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUser: (user: UserOut) => void;
+interface AuthContextType {
+  user: UserOut | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
   setupRequired: boolean;
-  checkingSetup: boolean;
+  isCheckingSetup: boolean;
+  loginSuccess: (token: string, user: UserOut) => void;
+  logout: () => void;
+  updateUser: (user: UserOut) => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType>({
+  user: null,
+  token: null,
+  isAuthenticated: false,
+  isLoading: true,
+  setupRequired: false,
+  isCheckingSetup: true,
+  loginSuccess: () => {},
+  logout: () => {},
+  updateUser: () => {},
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    token: null,
-    isAuthenticated: false,
-    isLoading: true,
-  });
+  const [user, setUser] = useState<UserOut | null>(null);
+  const [token, setToken] = useState<string | null>(() =>
+    localStorage.getItem('auth_token')
+  );
+  const [isLoading, setIsLoading] = useState(true);
   const [setupRequired, setSetupRequired] = useState(false);
-  const [checkingSetup, setCheckingSetup] = useState(true);
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
 
-  const loadUser = useCallback(async (token: string) => {
+  const fetchUser = useCallback(async () => {
     try {
-      const user = await getMe();
-      setState({
-        user,
-        token,
-        isAuthenticated: true,
-        isLoading: false,
-      });
+      const userData = await getMe();
+      setUser(userData);
+      return userData;
     } catch {
       localStorage.removeItem('auth_token');
-      localStorage.removeItem('persistent_token');
-      setState({
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+      localStorage.removeItem('auth_user');
+      setToken(null);
+      setUser(null);
+      return null;
     }
   }, []);
 
   useEffect(() => {
     const init = async () => {
-      setCheckingSetup(true);
+      setIsCheckingSetup(true);
       try {
         const status = await checkSetupStatus();
-        if (!status.setup_completed) {
+        if (!status.setup_completed && !status.admin_exists) {
           setSetupRequired(true);
-          setCheckingSetup(false);
-          setState(prev => ({ ...prev, isLoading: false }));
+          setIsCheckingSetup(false);
+          setIsLoading(false);
           return;
         }
       } catch {
-        // Si hay error al verificar setup, continuar con login normal
+        // If status check fails, assume setup is done
       }
-      setSetupRequired(false);
-      setCheckingSetup(false);
+      setIsCheckingSetup(false);
 
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('persistent_token');
-      if (token) {
-        await loadUser(token);
-      } else {
-        setState(prev => ({ ...prev, isLoading: false }));
+      const storedToken = localStorage.getItem('auth_token');
+      if (storedToken) {
+        await fetchUser();
       }
+      setIsLoading(false);
     };
+
     init();
-  }, [loadUser]);
+  }, [fetchUser]);
 
-  const login = useCallback(async (email: string, password: string, remember?: boolean) => {
-    const data: LoginRequest = { email, password };
-    if (remember) data.remember = true;
-    const res = await loginApi(data);
-    if (remember) {
-      localStorage.setItem('persistent_token', res.token);
-    } else {
-      localStorage.setItem('auth_token', res.token);
-    }
-    setState({
-      user: res.usuario,
-      token: res.token,
-      isAuthenticated: true,
-      isLoading: false,
-    });
+  const loginSuccess = useCallback((newToken: string, newUser: UserOut) => {
+    localStorage.setItem('auth_token', newToken);
+    localStorage.setItem('auth_user', JSON.stringify(newUser));
+    setToken(newToken);
+    setUser(newUser);
   }, []);
 
-  const logout = useCallback(async () => {
-    try {
-      await logoutApi();
-    } catch {
-      // Ignorar error de logout
-    }
+  const logout = useCallback(() => {
     localStorage.removeItem('auth_token');
-    localStorage.removeItem('persistent_token');
-    setState({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
-    });
+    localStorage.removeItem('auth_user');
+    setToken(null);
+    setUser(null);
   }, []);
 
-  const updateUser = useCallback((user: UserOut) => {
-    setState(prev => ({ ...prev, user }));
+  const updateUser = useCallback((updatedUser: UserOut) => {
+    setUser(updatedUser);
+    localStorage.setItem('auth_user', JSON.stringify(updatedUser));
   }, []);
 
   return (
     <AuthContext.Provider
       value={{
-        ...state,
-        login,
+        user,
+        token,
+        isAuthenticated: !!user && !!token,
+        isLoading,
+        setupRequired,
+        isCheckingSetup,
+        loginSuccess,
         logout,
         updateUser,
-        setupRequired,
-        checkingSetup,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
-
-export function useAuthContext(): AuthContextType {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuthContext debe usarse dentro de AuthProvider');
-  }
-  return ctx;
-}
-
-export default AuthContext;

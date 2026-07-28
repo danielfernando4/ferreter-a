@@ -1,141 +1,149 @@
-import React, { useState } from 'react';
-import { Loader2, Lock, Eye, EyeOff, Save } from 'lucide-react';
+import { useState } from 'react';
+import { Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { changePassword } from '../../services/api';
 
 interface ChangePasswordFormProps {
-  onSubmit: (data: {
-    current_password: string;
-    new_password: string;
-    confirm_password: string;
-  }) => Promise<void>;
+  userId?: number;
 }
 
-export default function ChangePasswordForm({ onSubmit }: ChangePasswordFormProps) {
+export function ChangePasswordForm({ userId: _userId }: ChangePasswordFormProps) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [showPasswords, setShowPasswords] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPassword) {
-      setError('La contraseña actual es obligatoria');
-      return;
-    }
-    if (!newPassword) {
-      setError('La nueva contraseña es obligatoria');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setError('La nueva contraseña debe tener al menos 6 caracteres');
-      return;
-    }
+    setError('');
+    setSuccess(false);
+
     if (newPassword !== confirmPassword) {
       setError('Las contraseñas nuevas no coinciden');
       return;
     }
+
+    if (newPassword.length < 6) {
+      setError('La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
     setIsLoading(true);
-    setError('');
-    setSuccess('');
     try {
-      await onSubmit({
+      await changePassword({
         current_password: currentPassword,
         new_password: newPassword,
         confirm_password: confirmPassword,
       });
-      setSuccess('Contraseña actualizada exitosamente');
+      setSuccess(true);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
-      setError(err.detail || 'Error al cambiar la contraseña');
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || 'Error al cambiar contraseña');
+      } else {
+        setError('Error al cambiar contraseña');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="p-2 bg-amber-100 rounded-xl">
-          <Lock className="text-amber-600" size={24} />
-        </div>
-        <h3 className="text-lg font-semibold text-slate-900">Cambiar contraseña</h3>
-      </div>
-
+  const PasswordInput = ({
+    id,
+    label,
+    value,
+    onChange,
+    show,
+    onToggleShow,
+  }: {
+    id: string;
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    show: boolean;
+    onToggleShow: () => void;
+  }) => (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-slate-700 mb-1.5">
+        {label}
+      </label>
       <div className="relative">
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Contraseña actual
-        </label>
+        <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
-          type={showPasswords ? 'text' : 'password'}
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white text-slate-900 pr-10"
-          disabled={isLoading}
+          id={id}
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required
+          className="w-full pl-10 pr-10 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
         />
         <button
           type="button"
-          onClick={() => setShowPasswords(!showPasswords)}
-          className="absolute right-3 top-[38px] text-slate-400 hover:text-slate-600"
+          onClick={onToggleShow}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
         >
-          {showPasswords ? <EyeOff size={18} /> : <Eye size={18} />}
+          {show ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
+    </div>
+  );
 
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Nueva contraseña
-        </label>
-        <input
-          type={showPasswords ? 'text' : 'password'}
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white text-slate-900"
-          placeholder="Mínimo 6 caracteres"
-          disabled={isLoading}
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">
-          Confirmar nueva contraseña
-        </label>
-        <input
-          type={showPasswords ? 'text' : 'password'}
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white text-slate-900"
-          placeholder="Repite la contraseña"
-          disabled={isLoading}
-        />
-      </div>
-
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="bg-red-50 text-red-600 text-sm px-4 py-2 rounded-xl border border-red-200">
-          {error}
+        <div className="bg-red-50 text-red-700 px-4 py-3 rounded-2xl text-sm">{error}</div>
+      )}
+      {success && (
+        <div className="bg-green-50 text-green-700 px-4 py-3 rounded-2xl text-sm">
+          Contraseña actualizada exitosamente
         </div>
       )}
 
-      {success && (
-        <div className="bg-green-50 text-green-600 text-sm px-4 py-2 rounded-xl border border-green-200">
-          {success}
-        </div>
-      )}
+      <PasswordInput
+        id="current-password"
+        label="Contraseña Actual"
+        value={currentPassword}
+        onChange={setCurrentPassword}
+        show={showCurrent}
+        onToggleShow={() => setShowCurrent(!showCurrent)}
+      />
+
+      <PasswordInput
+        id="new-password"
+        label="Nueva Contraseña"
+        value={newPassword}
+        onChange={setNewPassword}
+        show={showNew}
+        onToggleShow={() => setShowNew(!showNew)}
+      />
+
+      <PasswordInput
+        id="confirm-password"
+        label="Confirmar Nueva Contraseña"
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        show={showConfirm}
+        onToggleShow={() => setShowConfirm(!showConfirm)}
+      />
 
       <button
         type="submit"
         disabled={isLoading}
-        className="flex items-center gap-2 px-6 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 disabled:opacity-50 transition-all font-medium"
+        className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium"
       >
         {isLoading ? (
-          <Loader2 className="animate-spin" size={18} />
+          <Loader2 size={18} className="animate-spin" />
         ) : (
-          <Save size={18} />
+          <Lock size={18} />
         )}
-        {isLoading ? 'Guardando...' : 'Cambiar contraseña'}
+        {isLoading ? 'Actualizando...' : 'Cambiar Contraseña'}
       </button>
     </form>
   );

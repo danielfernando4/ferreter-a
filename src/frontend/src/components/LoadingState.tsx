@@ -4,13 +4,11 @@ interface LoadingStateProps {
   message?: string;
 }
 
-export default function LoadingState({ message }: LoadingStateProps) {
+export function LoadingState({ message = 'Cargando...' }: LoadingStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px]">
-      <Loader2 className="animate-spin text-blue-600 mb-3" size={32} />
-      {message && (
-        <p className="text-sm text-slate-500">{message}</p>
-      )}
+    <div className="flex flex-col items-center justify-center py-16 px-4">
+      <Loader2 size={40} className="text-blue-600 animate-spin mb-4" />
+      <p className="text-slate-500">{message}</p>
     </div>
   );
 }

@@ -1,13 +1,13 @@
-from datetime import datetime, timezone
+from typing import List, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autenticacin_usuarios_y_configuracin_inicial.models import TokenSesion, Usuario
-from autenticacin_usuarios_y_configuracin_inicial.utils import hash_token
 from database import get_db
+
+from . import models as mdl
+from .service import obtener_usuario_por_token
 
 security = HTTPBearer()
 
@@ -15,43 +15,44 @@ security = HTTPBearer()
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
-) -> Usuario:
-    token_str = credentials.credentials
-    token_hashed = hash_token(token_str)
-
-    result = await db.execute(
-        select(TokenSesion).where(
-            TokenSesion.token_hash == token_hashed,
-            TokenSesion.activo.is_(True),
-            TokenSesion.fecha_expiracion > datetime.now(timezone.utc),
-        )
-    )
-    token_row = result.scalar_one_or_none()
-
-    if token_row is None:
+) -> mdl.Usuario:
+    """Dependencia que obtiene el usuario autenticado a partir del token Bearer."""
+    token = credentials.credentials
+    usuario = await obtener_usuario_por_token(db, token)
+    if not usuario:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado",
+            detail="Token inválido, expirado o sesión cerrada",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-
-    user_result = await db.execute(
-        select(Usuario).where(Usuario.id == token_row.usuario_id)
-    )
-    user = user_result.scalar_one_or_none()
-
-    if user is None or not user.activo:
+    if not usuario.activo:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario no encontrado o inactivo",
+            detail="Usuario desactivado",
+            headers={"WWW-Authenticate": "Bearer"},
         )
+    return usuario
 
-    return user
+
+class RoleChecker:
+    """Dependencia que verifica que el usuario tenga un rol permitido."""
+
+    def __init__(self, allowed_roles: List[str]):
+        self.allowed_roles = allowed_roles
+
+    async def __call__(
+        self,
+        current_user: mdl.Usuario = Depends(get_current_user),
+    ) -> mdl.Usuario:
+        if current_user.rol.nombre not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permisos para acceder a este recurso",
+            )
+        return current_user
 
 
-async def require_admin(current_user: Usuario = Depends(get_current_user)) -> Usuario:
-    if current_user.rol.nombre != "administrador":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso denegado. Se requiere rol de administrador.",
-        )
-    return current_user
+# Predefinir checkeadores de rol
+require_admin = RoleChecker(["administrador"])
+require_admin_or_vendedor = RoleChecker(["administrador", "vendedor"])
+require_admin_or_almacen = RoleChecker(["administrador", "almacen"])

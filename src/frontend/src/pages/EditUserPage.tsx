@@ -1,87 +1,78 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { getUsuario, updateUsuario, UserUpdateRequest } from '../services/api';
-import UserForm from '../components/users/UserForm';
-import LoadingState from '../components/LoadingState';
-import ErrorState from '../components/ErrorState';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { UserForm } from '../components/users/UserForm';
+import { ErrorState } from '../components/ErrorState';
+import { getUsuario } from '../services/api';
+import type { UserOut } from '../types/auth';
 
 export default function EditUserPage() {
-  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const [user, setUser] = useState<any>(null);
+  const navigate = useNavigate();
+  const [user, setUser] = useState<UserOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
-    if (!id) {
-      setError('ID de usuario no proporcionado');
-      setIsLoading(false);
-      return;
-    }
-
-    const load = async () => {
+    const fetchUser = async () => {
+      if (!id) return;
+      setIsLoading(true);
+      setError('');
       try {
         const data = await getUsuario(Number(id));
         setUser(data);
-      } catch (err: any) {
-        setError(err.detail || 'Error al cargar el usuario');
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message || 'Error al cargar usuario');
+        } else {
+          setError('Error al cargar usuario');
+        }
       } finally {
         setIsLoading(false);
       }
     };
-    load();
+    fetchUser();
   }, [id]);
 
-  const handleSave = async (data: UserUpdateRequest) => {
-    try {
-      await updateUsuario(Number(id), data);
-      navigate('/usuarios');
-    } catch (err: any) {
-      setSaveError(err.detail || 'Error al actualizar el usuario');
-      throw err;
-    }
+  const handleSave = () => {
+    navigate('/usuarios');
   };
-
-  if (isLoading) {
-    return <LoadingState message="Cargando datos del usuario..." />;
-  }
-
-  if (error) {
-    return <ErrorState message={error} onRetry={() => navigate('/usuarios')} />;
-  }
 
   return (
     <div>
-      <div className="mb-6">
+      <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => navigate('/usuarios')}
-          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-2 transition-all"
+          className="p-2 rounded-2xl hover:bg-slate-100 transition-all"
         >
-          <ArrowLeft size={16} />
-          Volver a usuarios
+          <ArrowLeft size={20} className="text-slate-600" />
         </button>
-        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          {user?.nombre_completo || 'Editando usuario'}
-        </p>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Editar Usuario</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Modifica los datos del usuario
+          </p>
+        </div>
       </div>
 
-      {saveError && (
-        <div className="mb-4 bg-red-50 text-red-600 text-sm px-4 py-2 rounded-xl border border-red-200 max-w-lg">
-          {saveError}
-        </div>
-      )}
-
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        {user && (
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 max-w-lg">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={24} className="animate-spin text-blue-600" />
+          </div>
+        ) : error ? (
+          <ErrorState
+            title="Error al cargar usuario"
+            message={error}
+            onRetry={() => window.location.reload()}
+          />
+        ) : user ? (
           <UserForm
             initialData={user}
             mode="edit"
             onSave={handleSave}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );

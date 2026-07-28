@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, X } from 'lucide-react';
 
 interface SearchInputProps {
   value: string;
@@ -7,33 +7,27 @@ interface SearchInputProps {
   placeholder?: string;
 }
 
-export default function SearchInput({
-  value,
-  onChange,
-  placeholder = 'Buscar...',
-}: SearchInputProps) {
+export default function SearchInput({ value, onChange, placeholder = 'Buscar...' }: SearchInputProps) {
   const [localValue, setLocalValue] = useState(value);
-  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setLocalValue(newValue);
-    if (debounceTimer) clearTimeout(debounceTimer);
-    const timer = setTimeout(() => {
-      onChange(newValue);
+  const handleChange = (val: string) => {
+    setLocalValue(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      onChange(val);
     }, 400);
-    setDebounceTimer(timer);
   };
 
-  useEffect(() => {
-    return () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-    };
-  }, [debounceTimer]);
+  const handleClear = () => {
+    setLocalValue('');
+    if (timerRef.current) clearTimeout(timerRef.current);
+    onChange('');
+  };
 
   return (
     <div className="relative">
@@ -41,10 +35,18 @@ export default function SearchInput({
       <input
         type="text"
         value={localValue}
-        onChange={handleChange}
+        onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all text-sm"
+        className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm"
       />
+      {localValue && (
+        <button
+          onClick={handleClear}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }

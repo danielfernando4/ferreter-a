@@ -1,22 +1,26 @@
 import { useState, useEffect } from 'react';
-import { Loader2, AlertTriangle, UserCircle } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import { perfilApi } from '../services/api';
+import type { PreferenciasOut } from '../types/auth';
 import ProfileForm from '../components/profile/ProfileForm';
 import ChangePasswordForm from '../components/profile/ChangePasswordForm';
 import PreferencesForm from '../components/profile/PreferencesForm';
-import { perfilApi } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
-import type { PreferenciasOut } from '../types/auth';
+import { User, Lock, Settings, Loader2, AlertCircle } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, updateUser } = useAuth();
   const [preferencias, setPreferencias] = useState<PreferenciasOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'preferences'>('profile');
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    async function loadData() {
+      setIsLoading(true);
+      setError('');
       try {
         const response = await perfilApi.get();
+        updateUser(response.usuario);
         setPreferencias(response.preferencias);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Error al cargar perfil';
@@ -24,67 +28,78 @@ export default function ProfilePage() {
       } finally {
         setIsLoading(false);
       }
-    };
-    fetchProfile();
-  }, []);
+    }
+    loadData();
+  }, [updateUser]);
 
   const handleProfileSave = async (data: { nombre_completo?: string; email?: string }) => {
     const updatedUser = await perfilApi.update(data);
     updateUser(updatedUser);
   };
 
-  const handlePreferencesSave = async (data: Partial<PreferenciasOut>) => {
-    const updated = await perfilApi.updatePreferencias(data);
-    setPreferencias(updated);
+  const handlePreferencesSave = async (data: { idioma?: string; tema_visual?: string; zona_horaria?: string }) => {
+    const updatedPrefs = await perfilApi.updatePreferencias(data);
+    setPreferencias(updatedPrefs);
   };
+
+  const tabs = [
+    { id: 'profile', label: 'Datos Personales', icon: User },
+    { id: 'password', label: 'Contraseña', icon: Lock },
+    { id: 'preferences', label: 'Preferencias', icon: Settings },
+  ] as const;
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-        {error}
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+          <p className="text-sm text-slate-500">Cargando perfil...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
-      <div className="flex items-center gap-4">
-        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
-          <UserCircle className="h-8 w-8 text-slate-500" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Mi Perfil</h1>
-          <p className="text-sm text-slate-500">
-            {user?.nombre_completo} · {user?.email}
-          </p>
-        </div>
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Mi Perfil</h1>
+        <p className="text-sm text-slate-500 mt-1">Gestiona tu información personal y preferencias</p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Datos personales</h2>
-        {user && <ProfileForm user={user} onSave={handleProfileSave} />}
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-200 pb-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-medium transition-all ${
+              activeTab === tab.id
+                ? 'bg-white text-indigo-600 border border-slate-200 border-b-white -mb-[2px] shadow-sm'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <tab.icon className="h-4 w-4" />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-        {preferencias && (
-          <PreferencesForm
-            preferencias={preferencias}
-            onSave={handlePreferencesSave}
-          />
+      {/* Content */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+        {activeTab === 'profile' && user && (
+          <ProfileForm user={user} onSave={handleProfileSave} />
         )}
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-        <ChangePasswordForm />
+        {activeTab === 'password' && <ChangePasswordForm />}
+        {activeTab === 'preferences' && preferencias && (
+          <PreferencesForm preferencias={preferencias} onSave={handlePreferencesSave} />
+        )}
       </div>
     </div>
   );

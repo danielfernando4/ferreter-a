@@ -1,395 +1,372 @@
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Tuple
-from math import ceil
+"""Business logic for Autenticación, Usuarios y Configuración Inicial."""
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timedelta, timezone
+from typing import Optional, List, Tuple
+
 from sqlalchemy import select, func, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import Usuario, Rol, ConfiguracionNegocio, PreferenciasUsuario, TokenSesion, TokenRestablecimiento
+from .models import (
+    Usuario,
+    Rol,
+    ConfiguracionNegocio,
+    PreferenciasUsuario,
+    TokenSesion,
+    TokenRestablecimiento,
+)
 from .schemas import (
-    UserOut, UserCreateRequest, UserUpdateRequest, SetupRequest,
-    PreferenciasOut, PreferenciasUpdateRequest,
-    SetupResponse, LoginResponse, UserActionResponse,
-    PaginatedUsersResponse, PerfilResponse,
-    ForgotPasswordResponse, VerifyTokenResponse,
-    ResetPasswordResponse, ChangePasswordResponse,
-    LogoutResponse, SetupStatusResponse, ROLES_VALIDOS,
+    UserOut,
+    SetupRequest,
+    UserCreateRequest,
+    UserUpdateRequest,
+    PreferenciasOut,
+    PerfilResponse,
+    PaginatedUsersResponse,
 )
-from .utils import (
-    hash_password, verify_password,
-    create_access_token, decode_access_token,
-    generate_reset_token, hash_reset_token,
+from .utils import hash_password, verify_password, generate_token, hash_token
+from config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    REMEMBER_TOKEN_EXPIRE_DAYS,
+    RESET_TOKEN_EXPIRE_HOURS,
 )
 
-# ─── Helper ────────────────────────────────────────────────────────
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def _get_rol_nombre(usuario: Usuario) -> str:
-    """Safely extract rol name from user object."""
-    if hasattr(usuario.rol, "nombre"):
-        return usuario.rol.nombre
-    return str(usuario.rol)
-
-
-async def _get_user_out(usuario: Usuario, db: AsyncSession) -> UserOut:
-    """Convert Usuario ORM to UserOut schema with safe relationship access."""
-    # Ensure all needed relationships are loaded
-    from sqlalchemy.orm import attributes
-    if attributes.instance_state(usuario).unloaded_contains("rol"):
-        await db.refresh(usuario, ["rol"])
-    return UserOut.model_validate(usuario)
-
-
-async def _get_preferencias_out(usuario: Usuario, db: AsyncSession) -> PreferenciasOut:
-    """Get PreferenciasOut from user preferencias relationship or defaults."""
-    from sqlalchemy.orm import attributes
-    if attributes.instance_state(usuario).unloaded_contains("preferencias"):
-        await db.refresh(usuario, ["preferencias"])
-
-    pref = usuario.preferencias
-    if pref is None:
-        return PreferenciasOut()
-
-    # Map configuracion_regional -> zona_horaria
-    return PreferenciasOut(
-        idioma=pref.idioma,
-        tema_visual=pref.tema_visual,
-        zona_horaria=pref.configuracion_regional,
-    )
-
-
-async def _get_or_create_preferencias(usuario_id: int, db: AsyncSession) -> PreferenciasUsuario:
-    """Get existing preferencias or create defaults."""
-    result = await db.execute(
-        select(PreferenciasUsuario).where(PreferenciasUsuario.usuario_id == usuario_id)
-    )
-    pref = result.scalar_one_or_none()
-    if pref is None:
-        pref = PreferenciasUsuario(
-            usuario_id=usuario_id,
-            idioma="es",
-            tema_visual="light",
-            configuracion_regional="es-MX",
+async def _get_user_out(db: AsyncSession, user: Usuario) -> UserOut:
+    """Convert a Usuario ORM object to UserOut schema, ensuring all relationships are loaded."""
+    # Ensure rol is loaded
+    if not user.rol:
+        result = await db.execute(
+            select(Rol).where(Rol.id == user.rol_id)
         )
-        db.add(pref)
-        await db.flush()
-    return pref
+        user.rol = result.scalar_one_or_none()
+
+    return UserOut.model_validate(user)
 
 
-async def _seed_roles(db: AsyncSession) -> dict:
-    """Ensure the three predefined roles exist. Returns dict mapping name->id."""
-    roles_data = {
-        "administrador": "Acceso completo al sistema. Puede gestionar usuarios, productos, ventas, inventario y configuración.",
-        "vendedor": "Acceso al punto de venta y consulta de productos, clientes y reportes básicos.",
-        "almacen": "Acceso a inventario, órdenes de compra y productos. Sin acceso a ventas ni administración.",
-    }
-    result = {}
-    for nombre, descripcion in roles_data.items():
-        r = await db.execute(select(Rol).where(Rol.nombre == nombre))
-        rol = r.scalar_one_or_none()
-        if rol is None:
-            rol = Rol(nombre=nombre, descripcion=descripcion)
-            db.add(rol)
-            await db.flush()
-        result[nombre] = rol.id
-    return result
-
-
-# ═══════════════════════════════════════════════════════════════════
-# SETUP
-# ═══════════════════════════════════════════════════════════════════
-
-async def check_setup(db: AsyncSession) -> SetupStatusResponse:
-    """Check if setup has been completed and if an admin exists."""
-    result = await db.execute(select(ConfiguracionNegocio).where(ConfiguracionNegocio.setup_completado == True))
-    config_entry = result.scalar_one_or_none()
-
-    result_admin = await db.execute(
-        select(Usuario)
-        .options(selectinload(Usuario.rol))
-        .where(Usuario.activo == True)
-    )
-    users = result_admin.scalars().all()
-    admin_exists = False
-    for u in users:
-        if _get_rol_nombre(u) == "administrador":
-            admin_exists = True
-            break
-
-    return SetupStatusResponse(
-        setup_completed=config_entry is not None,
-        admin_exists=admin_exists,
-    )
-
-
-async def run_setup(data: SetupRequest, db: AsyncSession) -> SetupResponse:
-    """Execute the initial setup wizard: create admin user and business config."""
-    # Check if setup already completed
-    result = await db.execute(
-        select(ConfiguracionNegocio).where(ConfiguracionNegocio.setup_completado == True)
-    )
-    existing_config = result.scalar_one_or_none()
-    if existing_config is not None:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=409, detail="La configuración inicial ya fue completada.")
-
-    # Check if admin user already exists
-    result_admin_check = await db.execute(
-        select(Usuario).options(selectinload(Usuario.rol)).where(Usuario.activo == True)
-    )
-    existing_users = result_admin_check.scalars().all()
-    for u in existing_users:
-        if _get_rol_nombre(u) == "administrador":
-            from fastapi import HTTPException
-            raise HTTPException(status_code=409, detail="Ya existe un administrador registrado.")
-
-    # Seed roles
-    roles = await _seed_roles(db)
-
-    # Create admin user
-    password_hashed = hash_password(data.password)
-    admin_user = Usuario(
-        nombre_completo=data.nombre_completo,
-        email=data.email,
-        password_hash=password_hashed,
-        activo=True,
-        rol_id=roles["administrador"],
-        fecha_creacion=datetime.now(timezone.utc),
-        fecha_actualizacion=datetime.now(timezone.utc),
-        ultimo_acceso=datetime.now(timezone.utc),
-    )
-    db.add(admin_user)
-    await db.flush()
-
-    # Create default preferencias for admin
-    pref = PreferenciasUsuario(
-        usuario_id=admin_user.id,
-        idioma="es",
-        tema_visual="light",
-        configuracion_regional="es-MX",
-    )
-    db.add(pref)
-    await db.flush()
-
-    # Create business config
-    config_entry = ConfiguracionNegocio(
-        nombre=data.negocio_nombre,
-        direccion=data.negocio_direccion,
-        datos_fiscales=data.negocio_rfc,
-        telefono=data.negocio_telefono,
-        email_contacto=data.email,
-        setup_completado=True,
-        fecha_creacion=datetime.now(timezone.utc),
-    )
-    db.add(config_entry)
-    await db.flush()
-
-    # Refresh with all relationships for model_validate
-    await db.refresh(admin_user, ["rol", "preferencias", "tokens_sesion"])
-    user_out = UserOut.model_validate(admin_user)
-
-    return SetupResponse(
-        mensaje="Configuración inicial completada exitosamente.",
-        usuario=user_out,
-    )
-
-
-# ═══════════════════════════════════════════════════════════════════
-# LOGIN / LOGOUT
-# ═══════════════════════════════════════════════════════════════════
-
-async def login(email: str, password: str, remember: bool, db: AsyncSession) -> LoginResponse:
-    """Authenticate user and return JWT token."""
-    from fastapi import HTTPException
-
+async def _fetch_user_with_relations(db: AsyncSession, user_id: int) -> Optional[Usuario]:
+    """Fetch a user by ID with all relationships eager-loaded."""
     result = await db.execute(
         select(Usuario)
         .options(
             selectinload(Usuario.rol),
-            selectinload(Usuario.tokens_sesion),
             selectinload(Usuario.preferencias),
+            selectinload(Usuario.tokens_sesion),
+        )
+        .where(Usuario.id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _fetch_user_by_email_with_relations(db: AsyncSession, email: str) -> Optional[Usuario]:
+    """Fetch a user by email with all relationships eager-loaded."""
+    result = await db.execute(
+        select(Usuario)
+        .options(
+            selectinload(Usuario.rol),
+            selectinload(Usuario.preferencias),
+            selectinload(Usuario.tokens_sesion),
         )
         .where(Usuario.email == email)
     )
-    usuario = result.scalar_one_or_none()
+    return result.scalar_one_or_none()
 
-    if usuario is None or not verify_password(password, usuario.password_hash):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
-    if not usuario.activo:
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+# ─── Setup ────────────────────────────────────────────────────────────────────
 
-    # Update ultimo_acceso
-    usuario.ultimo_acceso = datetime.now(timezone.utc)
+async def check_setup_status(db: AsyncSession) -> dict:
+    """Check if setup has been completed and if an admin exists."""
+    # Check if admin exists
+    admin_role = await db.execute(select(Rol).where(Rol.nombre == "administrador"))
+    admin_role = admin_role.scalar_one_or_none()
+
+    admin_exists = False
+    if admin_role:
+        result = await db.execute(
+            select(func.count(Usuario.id)).where(
+                Usuario.rol_id == admin_role.id,
+                Usuario.activo == True,
+            )
+        )
+        admin_count = result.scalar()
+        admin_exists = admin_count > 0
+
+    # Check if setup is completed
+    setup_result = await db.execute(
+        select(ConfiguracionNegocio).where(ConfiguracionNegocio.setup_completado == True)
+    )
+    setup_completed = setup_result.scalar_one_or_none() is not None
+
+    return {"setup_completed": setup_completed, "admin_exists": admin_exists}
+
+
+async def run_setup(db: AsyncSession, data: SetupRequest) -> Tuple[str, Usuario]:
+    """Execute the initial setup wizard: create admin user, config, defaults."""
+    # Check if setup already completed
+    status = await check_setup_status(db)
+    if status["setup_completed"]:
+        raise ValueError("SETUP_ALREADY_COMPLETED")
+
+    # Check if email already exists
+    existing = await db.execute(select(Usuario).where(Usuario.email == data.email))
+    if existing.scalar_one_or_none():
+        raise ValueError("INVALID_DATA")
+
+    # Create or get admin rol
+    admin_rol = await db.execute(select(Rol).where(Rol.nombre == "administrador"))
+    admin_rol = admin_rol.scalar_one_or_none()
+    if not admin_rol:
+        # Create default roles
+        roles_data = [
+            ("administrador", "Acceso completo al sistema"),
+            ("vendedor", "Vendedor / Cajero - acceso a POS y clientes"),
+            ("almacen", "Almacén / Comprador - acceso a inventario y compras"),
+        ]
+        for nombre, desc in roles_data:
+            rol = Rol(nombre=nombre, descripcion=desc)
+            db.add(rol)
+        await db.flush()
+        admin_rol = await db.execute(select(Rol).where(Rol.nombre == "administrador"))
+        admin_rol = admin_rol.scalar_one()
+
+    # Create admin user
+    password_hash = hash_password(data.password)
+    user = Usuario(
+        nombre_completo=data.nombre_completo,
+        email=data.email,
+        password_hash=password_hash,
+        activo=True,
+        rol_id=admin_rol.id,
+        ultimo_acceso=datetime.now(timezone.utc),
+    )
+    db.add(user)
     await db.flush()
 
-    # Create JWT token
-    token_data = create_access_token(usuario.id, remember=remember)
-
-    user_out = UserOut.model_validate(usuario)
-
-    return LoginResponse(
-        token=token_data["token"],
-        token_type=token_data["token_type"],
-        expires_in=token_data["expires_in"],
-        usuario=user_out,
+    # Create default preferences for the admin user
+    prefs = PreferenciasUsuario(
+        usuario_id=user.id,
+        idioma="es",
+        tema_visual="light",
+        configuracion_regional="es-MX",
     )
+    db.add(prefs)
+    await db.flush()
+
+    # Create business configuration
+    config = ConfiguracionNegocio(
+        nombre=data.negocio_nombre,
+        direccion=data.negocio_direccion,
+        datos_fiscales=data.negocio_rfc,
+        rfc=data.negocio_rfc,
+        telefono=data.negocio_telefono,
+        email_contacto=data.email,
+        setup_completado=True,
+    )
+    db.add(config)
+    await db.flush()
+
+    # Refresh user to load relationships
+    await db.refresh(user, ["rol", "preferencias"])
+
+    return "Configuración inicial completada exitosamente", user
 
 
-async def logout(token: str, db: AsyncSession) -> LogoutResponse:
+# ─── Autenticación ────────────────────────────────────────────────────────────
+
+async def login_user(
+    db: AsyncSession,
+    email: str,
+    password: str,
+    remember: bool = False,
+) -> dict:
+    """Authenticate a user and generate a session token."""
+    # Find user by email
+    user = await _fetch_user_by_email_with_relations(db, email)
+
+    if user is None or not verify_password(password, user.password_hash):
+        raise ValueError("INVALID_CREDENTIALS")
+
+    if not user.activo:
+        raise ValueError("INVALID_CREDENTIALS")
+
+    # Update last access
+    user.ultimo_acceso = datetime.now(timezone.utc)
+
+    # Calculate expiration
+    if remember:
+        expires_in_seconds = REMEMBER_TOKEN_EXPIRE_DAYS * 24 * 3600
+        expiration = datetime.now(timezone.utc) + timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
+    else:
+        expires_in_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        expiration = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    # Generate and store token
+    raw_token = generate_token()
+    token_hash_val = hash_token(raw_token)
+
+    token_record = TokenSesion(
+        usuario_id=user.id,
+        token_hash=token_hash_val,
+        es_persistente=remember,
+        fecha_expiracion=expiration,
+        activo=True,
+    )
+    db.add(token_record)
+    await db.flush()
+
+    user_out = await _get_user_out(db, user)
+
+    return {
+        "token": raw_token,
+        "token_type": "bearer",
+        "expires_in": expires_in_seconds,
+        "usuario": user_out,
+    }
+
+
+async def logout_user(db: AsyncSession, user: Usuario, raw_token: str) -> None:
     """Invalidate the current session token."""
-    try:
-        payload = decode_access_token(token)
-    except ValueError:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
-
-    usuario_id = int(payload["sub"])
-    # Invalidate any active token sessions for this user
+    token_hash_val = hash_token(raw_token)
     result = await db.execute(
         select(TokenSesion).where(
-            TokenSesion.usuario_id == usuario_id,
+            TokenSesion.token_hash == token_hash_val,
+            TokenSesion.usuario_id == user.id,
             TokenSesion.activo == True,
         )
     )
-    active_tokens = result.scalars().all()
-    for t in active_tokens:
-        t.activo = False
+    token_record = result.scalar_one_or_none()
+    if token_record:
+        token_record.activo = False
+        await db.flush()
+
+
+async def invalidate_all_user_tokens(db: AsyncSession, user_id: int) -> None:
+    """Invalidate all active tokens for a user."""
+    result = await db.execute(
+        select(TokenSesion).where(
+            TokenSesion.usuario_id == user_id,
+            TokenSesion.activo == True,
+        )
+    )
+    tokens = result.scalars().all()
+    for token in tokens:
+        token.activo = False
+    if tokens:
+        await db.flush()
+
+
+# ─── Recuperación de Contraseña ───────────────────────────────────────────────
+
+async def forgot_password(db: AsyncSession, email: str) -> None:
+    """Generate and store a password reset token. Always returns success to avoid email enumeration."""
+    user = await _fetch_user_by_email_with_relations(db, email)
+    if user is None:
+        return  # Silent success to avoid email enumeration
+
+    # Invalidate any existing unused reset tokens for this user
+    result = await db.execute(
+        select(TokenRestablecimiento).where(
+            TokenRestablecimiento.usuario_id == user.id,
+            TokenRestablecimiento.utilizado == False,
+            TokenRestablecimiento.fecha_expiracion > datetime.now(timezone.utc),
+        )
+    )
+    old_tokens = result.scalars().all()
+    for t in old_tokens:
+        t.utilizado = True
+
+    # Generate new reset token
+    raw_token = generate_token()
+    token_hash_val = hash_token(raw_token)
+    expiration = datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_EXPIRE_HOURS)
+
+    reset_token = TokenRestablecimiento(
+        usuario_id=user.id,
+        token_hash=token_hash_val,
+        fecha_expiracion=expiration,
+        utilizado=False,
+    )
+    db.add(reset_token)
     await db.flush()
 
-    return LogoutResponse(mensaje="Sesión cerrada exitosamente.")
+    # Note: In a real system, we'd send an email here with the raw_token
+    # For MVP, the raw_token is returned implicitly — the frontend can simulate
+    # by storing it temporarily. In production, send an email.
 
 
-# ═══════════════════════════════════════════════════════════════════
-# PASSWORD RECOVERY
-# ═══════════════════════════════════════════════════════════════════
+async def verify_reset_token(db: AsyncSession, token: str) -> dict:
+    """Verify a password reset token and return the associated email."""
+    token_hash_val = hash_token(token)
+    now = datetime.now(timezone.utc)
 
-async def forgot_password(email: str, db: AsyncSession) -> ForgotPasswordResponse:
-    """Generate a password reset token and return success message (always generic)."""
-    result = await db.execute(select(Usuario).where(Usuario.email == email))
-    usuario = result.scalar_one_or_none()
-
-    if usuario is not None:
-        # Invalidate any existing unused tokens
-        existing = await db.execute(
-            select(TokenRestablecimiento).where(
-                TokenRestablecimiento.usuario_id == usuario.id,
-                TokenRestablecimiento.utilizado == False,
-                TokenRestablecimiento.fecha_expiracion > datetime.now(timezone.utc),
-            )
-        )
-        old_tokens = existing.scalars().all()
-        for t in old_tokens:
-            t.utilizado = True
-        await db.flush()
-
-        # Create new reset token
-        raw_token = generate_reset_token()
-        token_hash = hash_reset_token(raw_token)
-        reset_entry = TokenRestablecimiento(
-            usuario_id=usuario.id,
-            token_hash=token_hash,
-            fecha_expiracion=datetime.now(timezone.utc) + timedelta(hours=1),
-            utilizado=False,
-            fecha_creacion=datetime.now(timezone.utc),
-        )
-        db.add(reset_entry)
-        await db.flush()
-
-    # Always return generic success message
-    return ForgotPasswordResponse(
-        mensaje="Si el correo está registrado, recibirás un enlace de recuperación."
-    )
-
-
-async def verify_reset_token(token: str, db: AsyncSession) -> VerifyTokenResponse:
-    """Verify if a reset token is valid and return the associated email."""
-    from fastapi import HTTPException
-
-    token_hash = hash_reset_token(token)
     result = await db.execute(
         select(TokenRestablecimiento)
         .options(selectinload(TokenRestablecimiento.usuario))
         .where(
-            TokenRestablecimiento.token_hash == token_hash,
+            TokenRestablecimiento.token_hash == token_hash_val,
             TokenRestablecimiento.utilizado == False,
-            TokenRestablecimiento.fecha_expiracion > datetime.now(timezone.utc),
         )
     )
-    reset_entry = result.scalar_one_or_none()
+    reset_token = result.scalar_one_or_none()
 
-    if reset_entry is None:
-        # Check if token exists but expired
-        result_expired = await db.execute(
-            select(TokenRestablecimiento)
-            .options(selectinload(TokenRestablecimiento.usuario))
-            .where(TokenRestablecimiento.token_hash == token_hash)
-        )
-        expired_entry = result_expired.scalar_one_or_none()
-        if expired_entry is not None:
-            if expired_entry.fecha_expiracion <= datetime.now(timezone.utc):
-                raise HTTPException(status_code=410, detail="El enlace de recuperación ha expirado.")
-            raise HTTPException(status_code=404, detail="Token no encontrado.")
-        raise HTTPException(status_code=404, detail="Token no encontrado.")
+    if reset_token is None:
+        raise ValueError("TOKEN_NOT_FOUND")
 
-    email = reset_entry.usuario.email
-    return VerifyTokenResponse(valido=True, email=email)
+    if reset_token.fecha_expiracion < now:
+        raise ValueError("TOKEN_EXPIRED")
+
+    return {"valido": True, "email": reset_token.usuario.email}
 
 
-async def reset_password(token: str, new_password: str, confirm_password: str, db: AsyncSession) -> ResetPasswordResponse:
-    """Reset password using a valid reset token."""
-    from fastapi import HTTPException
-
+async def reset_password(db: AsyncSession, token: str, new_password: str, confirm_password: str) -> str:
+    """Reset a user's password using a valid reset token."""
     if new_password != confirm_password:
-        raise HTTPException(status_code=400, detail="Las contraseñas no coinciden.")
+        raise ValueError("PASSWORDS_DONT_MATCH")
 
-    token_hash = hash_reset_token(token)
+    token_hash_val = hash_token(token)
+    now = datetime.now(timezone.utc)
+
     result = await db.execute(
         select(TokenRestablecimiento)
         .options(selectinload(TokenRestablecimiento.usuario))
         .where(
-            TokenRestablecimiento.token_hash == token_hash,
+            TokenRestablecimiento.token_hash == token_hash_val,
             TokenRestablecimiento.utilizado == False,
-            TokenRestablecimiento.fecha_expiracion > datetime.now(timezone.utc),
         )
     )
-    reset_entry = result.scalar_one_or_none()
+    reset_token = result.scalar_one_or_none()
 
-    if reset_entry is None:
-        raise HTTPException(status_code=410, detail="El enlace de recuperación es inválido o ha expirado.")
+    if reset_token is None or reset_token.fecha_expiracion < now:
+        raise ValueError("TOKEN_INVALID_OR_EXPIRED")
 
     # Update password
-    usuario = reset_entry.usuario
-    usuario.password_hash = hash_password(new_password)
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
+    user = reset_token.usuario
+    user.password_hash = hash_password(new_password)
 
     # Invalidate token
-    reset_entry.utilizado = True
+    reset_token.utilizado = True
+
+    # Invalidate all active sessions for this user
+    await invalidate_all_user_tokens(db, user.id)
+
     await db.flush()
 
-    return ResetPasswordResponse(mensaje="Contraseña restablecida exitosamente.")
+    return "Contraseña restablecida exitosamente"
 
 
-# ═══════════════════════════════════════════════════════════════════
-# USERS CRUD
-# ═══════════════════════════════════════════════════════════════════
-
-async def get_me(usuario: Usuario, db: AsyncSession) -> UserOut:
-    """Get the current authenticated user's profile."""
-    return await _get_user_out(usuario, db)
-
+# ─── Gestión de Usuarios ──────────────────────────────────────────────────────
 
 async def list_usuarios(
-    search: Optional[str],
-    page: int,
-    page_size: int,
     db: AsyncSession,
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 10,
 ) -> PaginatedUsersResponse:
-    """List users with pagination and optional search."""
+    """List users with optional search and pagination."""
     query = select(Usuario).options(
         selectinload(Usuario.rol),
-        selectinload(Usuario.tokens_sesion),
         selectinload(Usuario.preferencias),
     )
 
@@ -402,27 +379,22 @@ async def list_usuarios(
             )
         )
 
-    # Get total count
-    count_query = select(func.count(Usuario.id))
-    if search:
-        search_pattern = f"%{search}%"
-        count_query = count_query.where(
-            or_(
-                Usuario.nombre_completo.ilike(search_pattern),
-                Usuario.email.ilike(search_pattern),
-            )
-        )
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)
-    total = total_result.scalar_one()
+    total = total_result.scalar()
 
-    # Get paginated results
+    # Paginate
     offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size).order_by(Usuario.id)
+    query = query.order_by(Usuario.id.desc()).offset(offset).limit(page_size)
     result = await db.execute(query)
-    usuarios = result.scalars().all()
+    users = result.scalars().all()
 
-    items = [UserOut.model_validate(u) for u in usuarios]
-    total_pages = ceil(total / page_size) if total > 0 else 1
+    items = []
+    for user in users:
+        items.append(await _get_user_out(db, user))
+
+    total_pages = max(1, (total + page_size - 1) // page_size)
 
     return PaginatedUsersResponse(
         items=items,
@@ -433,227 +405,241 @@ async def list_usuarios(
     )
 
 
-async def get_usuario(usuario_id: int, db: AsyncSession) -> Usuario:
-    """Get a single user by ID with eager loaded relationships."""
-    from fastapi import HTTPException
-
-    result = await db.execute(
-        select(Usuario)
-        .options(
-            selectinload(Usuario.rol),
-            selectinload(Usuario.tokens_sesion),
-            selectinload(Usuario.preferencias),
-        )
-        .where(Usuario.id == usuario_id)
-    )
-    usuario = result.scalar_one_or_none()
-    if usuario is None:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
-    return usuario
+async def get_usuario(db: AsyncSession, user_id: int) -> Usuario:
+    """Get a single user by ID."""
+    user = await _fetch_user_with_relations(db, user_id)
+    if user is None:
+        raise ValueError("NOT_FOUND")
+    return user
 
 
-async def create_usuario(data: UserCreateRequest, db: AsyncSession) -> UserOut:
+async def create_usuario(db: AsyncSession, data: UserCreateRequest) -> Usuario:
     """Create a new user."""
-    from fastapi import HTTPException
-
-    if data.rol not in ROLES_VALIDOS:
-        raise HTTPException(status_code=400, detail=f"Rol inválido. Roles válidos: {', '.join(ROLES_VALIDOS)}")
-
-    # Check email uniqueness
+    # Check if email already exists
     existing = await db.execute(select(Usuario).where(Usuario.email == data.email))
-    if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado.")
+    if existing.scalar_one_or_none():
+        raise ValueError("EMAIL_EXISTS")
 
-    # Ensure roles exist
-    roles = await _seed_roles(db)
+    # Find rol
+    rol = await db.execute(select(Rol).where(Rol.nombre == data.rol))
+    rol = rol.scalar_one_or_none()
+    if rol is None:
+        raise ValueError("INVALID_DATA")
 
-    password_hashed = hash_password(data.password)
-    new_user = Usuario(
+    # Create user
+    password_hash_val = hash_password(data.password)
+    user = Usuario(
         nombre_completo=data.nombre_completo,
         email=data.email,
-        password_hash=password_hashed,
+        password_hash=password_hash_val,
         activo=True,
-        rol_id=roles[data.rol],
-        fecha_creacion=datetime.now(timezone.utc),
-        fecha_actualizacion=datetime.now(timezone.utc),
+        rol_id=rol.id,
     )
-    db.add(new_user)
+    db.add(user)
     await db.flush()
 
-    # Create default preferencias
-    pref = PreferenciasUsuario(
-        usuario_id=new_user.id,
+    # Create default preferences
+    prefs = PreferenciasUsuario(
+        usuario_id=user.id,
         idioma="es",
         tema_visual="light",
         configuracion_regional="es-MX",
     )
-    db.add(pref)
+    db.add(prefs)
     await db.flush()
 
-    # Refresh with all relationships
-    await db.refresh(new_user, ["rol", "preferencias", "tokens_sesion"])
-    return UserOut.model_validate(new_user)
+    # Refresh to load relationships
+    await db.refresh(user, ["rol", "preferencias"])
+
+    return user
 
 
-async def update_usuario(usuario_id: int, data: UserUpdateRequest, db: AsyncSession) -> UserOut:
+async def update_usuario(db: AsyncSession, user_id: int, data: UserUpdateRequest) -> Usuario:
     """Update an existing user."""
-    from fastapi import HTTPException
-
-    usuario = await get_usuario(usuario_id, db)
-
-    if data.rol is not None and data.rol not in ROLES_VALIDOS:
-        raise HTTPException(status_code=400, detail=f"Rol inválido. Roles válidos: {', '.join(ROLES_VALIDOS)}")
+    user = await _fetch_user_with_relations(db, user_id)
+    if user is None:
+        raise ValueError("NOT_FOUND")
 
     # Check email uniqueness if changing
-    if data.email is not None and data.email != usuario.email:
+    if data.email is not None and data.email != user.email:
         existing = await db.execute(select(Usuario).where(Usuario.email == data.email))
-        if existing.scalar_one_or_none() is not None:
-            raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado.")
+        if existing.scalar_one_or_none():
+            raise ValueError("EMAIL_EXISTS")
+        user.email = data.email
 
     if data.nombre_completo is not None:
-        usuario.nombre_completo = data.nombre_completo
-    if data.email is not None:
-        usuario.email = data.email
+        user.nombre_completo = data.nombre_completo
+
     if data.rol is not None:
-        roles = await _seed_roles(db)
-        usuario.rol_id = roles[data.rol]
+        rol = await db.execute(select(Rol).where(Rol.nombre == data.rol))
+        rol = rol.scalar_one_or_none()
+        if rol is None:
+            raise ValueError("INVALID_DATA")
+        user.rol_id = rol.id
 
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
+    user.fecha_actualizacion = datetime.now(timezone.utc)
     await db.flush()
+    await db.refresh(user, ["rol", "preferencias"])
 
-    await db.refresh(usuario, ["rol", "preferencias", "tokens_sesion"])
-    return UserOut.model_validate(usuario)
+    return user
 
 
-async def deactivate_usuario(usuario_id: int, current_user: Usuario, db: AsyncSession) -> UserActionResponse:
-    """Deactivate a user account."""
-    from fastapi import HTTPException
+async def deactivate_usuario(db: AsyncSession, user_id: int, current_user_id: int) -> Usuario:
+    """Deactivate a user. Cannot deactivate self."""
+    if user_id == current_user_id:
+        raise ValueError("CANNOT_DEACTIVATE_SELF")
 
-    if usuario_id == current_user.id:
-        raise HTTPException(status_code=409, detail="No puedes desactivar tu propia cuenta.")
+    user = await _fetch_user_with_relations(db, user_id)
+    if user is None:
+        raise ValueError("NOT_FOUND")
 
-    usuario = await get_usuario(usuario_id, db)
-    if not usuario.activo:
-        raise HTTPException(status_code=400, detail="El usuario ya está inactivo.")
-
-    usuario.activo = False
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
+    user.activo = False
+    user.fecha_actualizacion = datetime.now(timezone.utc)
 
     # Invalidate all active tokens
-    result = await db.execute(
-        select(TokenSesion).where(
-            TokenSesion.usuario_id == usuario_id,
-            TokenSesion.activo == True,
+    await invalidate_all_user_tokens(db, user_id)
+
+    await db.flush()
+    await db.refresh(user, ["rol", "preferencias"])
+
+    return user
+
+
+async def reactivate_usuario(db: AsyncSession, user_id: int) -> Usuario:
+    """Reactivate a deactivated user."""
+    user = await _fetch_user_with_relations(db, user_id)
+    if user is None:
+        raise ValueError("NOT_FOUND")
+
+    user.activo = True
+    user.fecha_actualizacion = datetime.now(timezone.utc)
+    await db.flush()
+    await db.refresh(user, ["rol", "preferencias"])
+
+    return user
+
+
+# ─── Perfil y Preferencias ────────────────────────────────────────────────────
+
+async def get_perfil(db: AsyncSession, user: Usuario) -> PerfilResponse:
+    """Get the profile and preferences of the current user."""
+    # Ensure user relationships are loaded
+    if not user.rol:
+        user = await _fetch_user_with_relations(db, user.id)
+
+    user_out = await _get_user_out(db, user)
+
+    # Get or create preferences
+    if not user.preferencias:
+        prefs = PreferenciasUsuario(
+            usuario_id=user.id,
+            idioma="es",
+            tema_visual="light",
+            configuracion_regional="es-MX",
         )
-    )
-    active_tokens = result.scalars().all()
-    for t in active_tokens:
-        t.activo = False
+        db.add(prefs)
+        await db.flush()
+        await db.refresh(user, ["preferencias"])
 
-    await db.flush()
-    await db.refresh(usuario, ["rol", "preferencias", "tokens_sesion"])
-
-    return UserActionResponse(
-        mensaje="Usuario desactivado exitosamente.",
-        usuario=UserOut.model_validate(usuario),
+    preferencias_out = PreferenciasOut(
+        idioma=user.preferencias.idioma,
+        tema_visual=user.preferencias.tema_visual,
+        zona_horaria=user.preferencias.configuracion_regional,
     )
 
-
-async def reactivate_usuario(usuario_id: int, db: AsyncSession) -> UserActionResponse:
-    """Reactivate a deactivated user account."""
-    from fastapi import HTTPException
-
-    usuario = await get_usuario(usuario_id, db)
-    if usuario.activo:
-        raise HTTPException(status_code=400, detail="El usuario ya está activo.")
-
-    usuario.activo = True
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
-    await db.flush()
-
-    await db.refresh(usuario, ["rol", "preferencias", "tokens_sesion"])
-
-    return UserActionResponse(
-        mensaje="Usuario reactivado exitosamente.",
-        usuario=UserOut.model_validate(usuario),
-    )
+    return PerfilResponse(usuario=user_out, preferencias=preferencias_out)
 
 
-# ═══════════════════════════════════════════════════════════════════
-# PERFIL
-# ═══════════════════════════════════════════════════════════════════
-
-async def get_perfil(usuario: Usuario, db: AsyncSession) -> PerfilResponse:
-    """Get user profile with preferences."""
-    user_out = await _get_user_out(usuario, db)
-    pref_out = await _get_preferencias_out(usuario, db)
-    return PerfilResponse(usuario=user_out, preferencias=pref_out)
-
-
-async def update_perfil(usuario: Usuario, nombre_completo: Optional[str], email: Optional[str], db: AsyncSession) -> UserOut:
-    """Update current user's profile."""
-    from fastapi import HTTPException
-
-    if email is not None and email != usuario.email:
+async def update_perfil(db: AsyncSession, user: Usuario, nombre_completo: Optional[str], email: Optional[str]) -> Usuario:
+    """Update the current user's profile."""
+    if email is not None and email != user.email:
         existing = await db.execute(select(Usuario).where(Usuario.email == email))
-        if existing.scalar_one_or_none() is not None:
-            raise HTTPException(status_code=409, detail="El correo electrónico ya está registrado.")
+        if existing.scalar_one_or_none():
+            raise ValueError("EMAIL_EXISTS")
+        user.email = email
 
     if nombre_completo is not None:
-        usuario.nombre_completo = nombre_completo
-    if email is not None:
-        usuario.email = email
+        user.nombre_completo = nombre_completo
 
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
+    user.fecha_actualizacion = datetime.now(timezone.utc)
     await db.flush()
+    await db.refresh(user, ["rol", "preferencias"])
 
-    await db.refresh(usuario, ["rol", "preferencias", "tokens_sesion"])
-    return UserOut.model_validate(usuario)
+    return user
 
 
-async def change_password(
-    usuario: Usuario,
+async def change_user_password(
+    db: AsyncSession,
+    user: Usuario,
     current_password: str,
     new_password: str,
     confirm_password: str,
-    db: AsyncSession,
-) -> ChangePasswordResponse:
+) -> str:
     """Change the current user's password."""
-    from fastapi import HTTPException
-
-    if not verify_password(current_password, usuario.password_hash):
-        raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta.")
-
     if new_password != confirm_password:
-        raise HTTPException(status_code=400, detail="Las contraseñas nuevas no coinciden.")
+        raise ValueError("PASSWORDS_DONT_MATCH")
 
-    usuario.password_hash = hash_password(new_password)
-    usuario.fecha_actualizacion = datetime.now(timezone.utc)
+    if not verify_password(current_password, user.password_hash):
+        raise ValueError("INVALID_CURRENT_PASSWORD")
+
+    user.password_hash = hash_password(new_password)
+    user.fecha_actualizacion = datetime.now(timezone.utc)
     await db.flush()
 
-    return ChangePasswordResponse(mensaje="Contraseña actualizada exitosamente.")
+    return "Contraseña cambiada exitosamente"
 
 
-async def get_preferencias(usuario: Usuario, db: AsyncSession) -> PreferenciasOut:
-    """Get user preferences."""
-    return await _get_preferencias_out(usuario, db)
-
-
-async def update_preferencias(usuario: Usuario, data: PreferenciasUpdateRequest, db: AsyncSession) -> PreferenciasOut:
-    """Update user preferences."""
-    pref = await _get_or_create_preferencias(usuario.id, db)
-
-    if data.idioma is not None:
-        pref.idioma = data.idioma
-    if data.tema_visual is not None:
-        pref.tema_visual = data.tema_visual
-    if data.zona_horaria is not None:
-        pref.configuracion_regional = data.zona_horaria
-
-    await db.flush()
+async def get_preferencias(db: AsyncSession, user: Usuario) -> PreferenciasOut:
+    """Get the current user's preferences."""
+    if not user.preferencias:
+        prefs = PreferenciasUsuario(
+            usuario_id=user.id,
+            idioma="es",
+            tema_visual="light",
+            configuracion_regional="es-MX",
+        )
+        db.add(prefs)
+        await db.flush()
+        await db.refresh(user, ["preferencias"])
 
     return PreferenciasOut(
-        idioma=pref.idioma,
-        tema_visual=pref.tema_visual,
-        zona_horaria=pref.configuracion_regional,
+        idioma=user.preferencias.idioma,
+        tema_visual=user.preferencias.tema_visual,
+        zona_horaria=user.preferencias.configuracion_regional,
+    )
+
+
+async def update_preferencias(
+    db: AsyncSession,
+    user: Usuario,
+    idioma: Optional[str],
+    tema_visual: Optional[str],
+    zona_horaria: Optional[str],
+) -> PreferenciasOut:
+    """Update the current user's preferences."""
+    if not user.preferencias:
+        prefs = PreferenciasUsuario(
+            usuario_id=user.id,
+            idioma="es",
+            tema_visual="light",
+            configuracion_regional="es-MX",
+        )
+        db.add(prefs)
+        await db.flush()
+        await db.refresh(user, ["preferencias"])
+
+    if idioma is not None:
+        user.preferencias.idioma = idioma
+    if tema_visual is not None:
+        user.preferencias.tema_visual = tema_visual
+    if zona_horaria is not None:
+        user.preferencias.configuracion_regional = zona_horaria
+
+    await db.flush()
+    await db.refresh(user.preferencias)
+
+    return PreferenciasOut(
+        idioma=user.preferencias.idioma,
+        tema_visual=user.preferencias.tema_visual,
+        zona_horaria=user.preferencias.configuracion_regional,
     )

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
-import UserForm from '../components/users/UserForm';
 import { usuariosApi } from '../services/api';
+import UserForm from '../components/users/UserForm';
 import type { UserOut, UserUpdateRequest } from '../types/auth';
+import { ArrowLeft, Edit2, Loader2, AlertCircle } from 'lucide-react';
 
 export default function EditUserPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,14 +13,12 @@ export default function EditUserPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!id) {
-      setError('ID de usuario no proporcionado');
-      setIsLoading(false);
-      return;
-    }
-    const fetchUser = async () => {
+    async function loadUser() {
+      if (!id) return;
+      setIsLoading(true);
+      setError('');
       try {
-        const data = await usuariosApi.get(Number(id));
+        const data = await usuariosApi.getById(Number(id));
         setUser(data);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Error al cargar usuario';
@@ -28,8 +26,8 @@ export default function EditUserPage() {
       } finally {
         setIsLoading(false);
       }
-    };
-    fetchUser();
+    }
+    loadUser();
   }, [id]);
 
   const handleSave = async (data: UserUpdateRequest) => {
@@ -40,53 +38,58 @@ export default function EditUserPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-      </div>
-    );
-  }
-
-  if (error || !user) {
-    return (
-      <div className="space-y-4">
-        <button
-          onClick={() => navigate('/usuarios')}
-          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-all"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Volver a usuarios
-        </button>
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          {error || 'Usuario no encontrado'}
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+          <p className="text-sm text-slate-500">Cargando datos del usuario...</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div>
+  if (error) {
+    return (
+      <div className="space-y-4">
         <button
           onClick={() => navigate('/usuarios')}
-          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 mb-4 transition-all"
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Volver a usuarios
         </button>
-        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Editando: {user.nombre_completo}
-        </p>
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-4 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a usuarios
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+            <Edit2 className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Editar Usuario</h1>
+            <p className="text-sm text-slate-500">{user.nombre_completo}</p>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-        <UserForm
-          initialData={user}
-          mode="edit"
-          onSave={handleSave}
-          onCancel={() => navigate('/usuarios')}
-        />
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+        <UserForm mode="edit" initialData={user} onSave={handleSave} />
       </div>
     </div>
   );

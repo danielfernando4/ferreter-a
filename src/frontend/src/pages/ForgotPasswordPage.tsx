@@ -1,41 +1,31 @@
-import { useState } from 'react';
-import { Store, CheckCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import ForgotPasswordForm from '../components/auth/ForgotPasswordForm';
+import { ArrowLeft, Lock } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
-  const [emailSent, setEmailSent] = useState(false);
-
-  if (emailSent) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-2xl mb-4">
-            <CheckCircle className="h-8 w-8 text-green-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Revisa tu correo</h1>
-          <p className="text-sm text-slate-500">
-            Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-900 rounded-2xl shadow-sm mb-4">
-            <Store className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center h-16 w-16 bg-indigo-100 rounded-2xl mb-4">
+            <Lock className="h-8 w-8 text-indigo-600" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Recuperar contraseña</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Te enviaremos un enlace para restablecer tu contraseña
-          </p>
+          <h1 className="text-3xl font-bold text-slate-900">Ferretería</h1>
+          <p className="text-slate-500 mt-2">Recuperación de contraseña</p>
         </div>
-
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
-          <ForgotPasswordForm onSuccess={() => setEmailSent(true)} />
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          <ForgotPasswordForm />
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => navigate('/login')}
+              className="inline-flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Volver al inicio de sesión
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,15 +1,11 @@
-// ============================================================
-// Types de Autenticación, Usuarios y Configuración Inicial
-// ============================================================
-
-// --- Usuario ---
+// --- Esquemas de Usuario ---
 export interface UserOut {
   id: number;
   nombre_completo: string;
   email: string;
   rol: string; // "administrador" | "vendedor" | "almacen"
   activo: boolean;
-  fecha_registro: string;
+  fecha_registro: string; // datetime ISO string
   ultimo_acceso: string | null;
 }
 
@@ -26,7 +22,7 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
-// --- Autenticación ---
+// --- Esquemas de Autenticación ---
 export interface LoginRequest {
   email: string;
   password: string;
@@ -40,7 +36,12 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
-// --- Setup ---
+// --- Esquemas de Setup ---
+export interface SetupStatusResponse {
+  setup_completed: boolean;
+  admin_exists: boolean;
+}
+
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -56,12 +57,7 @@ export interface SetupResponse {
   usuario: UserOut;
 }
 
-export interface SetupStatusResponse {
-  setup_completed: boolean;
-  admin_exists: boolean;
-}
-
-// --- Preferencias ---
+// --- Esquemas de Preferencias ---
 export interface PreferenciasOut {
   idioma: string;
   tema_visual: string;
@@ -74,13 +70,18 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
-// --- Recuperación de Contraseña ---
+// --- Esquemas de Recuperación ---
 export interface ForgotPasswordRequest {
   email: string;
 }
 
 export interface ForgotPasswordResponse {
   mensaje: string;
+}
+
+export interface VerifyTokenResponse {
+  valido: boolean;
+  email: string;
 }
 
 export interface ResetPasswordRequest {
@@ -103,12 +104,7 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
-export interface VerifyTokenResponse {
-  valido: boolean;
-  email: string;
-}
-
-// --- Respuestas Genéricas ---
+// --- Esquemas de Respuesta Genéricos ---
 export interface PaginatedUsersResponse {
   items: UserOut[];
   total: number;
@@ -127,15 +123,6 @@ export interface PerfilResponse {
   preferencias: PreferenciasOut;
 }
 
-export interface PerfilUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-}
-
-// --- Estado de Autenticación ---
-export interface AuthState {
-  user: UserOut | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
+export interface LogoutResponse {
+  mensaje: string;
 }

@@ -1,39 +1,41 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { LogIn, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { authApi } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import { LogIn, Loader2, Eye, EyeOff } from 'lucide-react';
 
 interface LoginFormProps {
-  onSuccess: () => void;
+  onSuccess?: () => void;
 }
 
 export default function LoginForm({ onSuccess }: LoginFormProps) {
+  const navigate = useNavigate();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
-      setError('Todos los campos son obligatorios');
+      setError('Ingresa tu correo y contraseña.');
       return;
     }
+
     setIsLoading(true);
     setError('');
+
     try {
-      await login({ email: email.trim(), password, remember });
-      onSuccess();
+      const response = await authApi.login({ email: email.trim(), password, remember });
+      login(response.token, response.usuario, remember);
+      onSuccess?.();
+      navigate('/');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Credenciales inválidas';
-      if (message.includes('401') || message.includes('INVALID_CREDENTIALS')) {
-        setError('Credenciales inválidas');
-      } else {
-        setError(message);
-      }
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -41,41 +43,31 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
-          Correo electrónico
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          Correo Electrónico
         </label>
         <input
-          id="email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm"
           placeholder="tu@correo.com"
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all text-sm"
-          disabled={isLoading}
           autoComplete="email"
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+        <label className="block text-sm font-medium text-slate-700 mb-1">
           Contraseña
         </label>
         <div className="relative">
           <input
-            id="password"
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm"
             placeholder="••••••••"
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all text-sm pr-10"
-            disabled={isLoading}
             autoComplete="current-password"
           />
           <button
@@ -89,34 +81,46 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       </div>
 
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
-            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
           />
-          Recordar sesión
+          <span className="text-sm text-slate-600">Recordar sesión</span>
         </label>
-        <Link
-          to="/forgot-password"
-          className="text-sm text-slate-600 hover:text-slate-900 underline"
+        <button
+          type="button"
+          onClick={() => navigate('/forgot-password')}
+          className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
         >
           ¿Olvidaste tu contraseña?
-        </Link>
+        </button>
       </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium"
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
         {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Iniciando sesión...
+          </>
         ) : (
-          <LogIn className="h-4 w-4" />
+          <>
+            <LogIn className="h-4 w-4" />
+            Iniciar Sesión
+          </>
         )}
-        {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
       </button>
     </form>
   );

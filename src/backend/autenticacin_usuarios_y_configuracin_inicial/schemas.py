@@ -1,14 +1,11 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-from typing import Optional, List
+"""Pydantic v2 schemas for Autenticación, Usuarios y Configuración Inicial."""
+
 from datetime import datetime
+from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
 
 
-# ─── Enums / Constants ────────────────────────────────────────────
-
-ROLES_VALIDOS = ["administrador", "vendedor", "almacen"]
-
-
-# ─── Esquemas de Usuario ──────────────────────────────────────────
+# ─── Usuario ──────────────────────────────────────────────────────────────────
 
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -16,9 +13,9 @@ class UserOut(BaseModel):
     id: int
     nombre_completo: str
     email: str
-    rol: str
+    rol: str  # nombre del rol, no el objeto ORM
     activo: bool
-    fecha_registro: datetime = Field(validation_alias="fecha_creacion")
+    fecha_creacion: Optional[datetime] = None
     ultimo_acceso: Optional[datetime] = None
 
     @field_validator("rol", mode="before")
@@ -28,29 +25,24 @@ class UserOut(BaseModel):
             return v.nombre
         return str(v)
 
-    @field_validator("fecha_registro", mode="before")
-    @classmethod
-    def validate_fecha_registro(cls, v):
-        return v
-
 
 class UserCreateRequest(BaseModel):
-    nombre_completo: str
+    nombre_completo: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    rol: str
+    rol: str = Field(..., pattern="^(administrador|vendedor|almacen)$")
 
 
 class UserUpdateRequest(BaseModel):
-    nombre_completo: Optional[str] = None
+    nombre_completo: Optional[str] = Field(None, min_length=1, max_length=150)
     email: Optional[EmailStr] = None
-    rol: Optional[str] = None
+    rol: Optional[str] = Field(None, pattern="^(administrador|vendedor|almacen)$")
 
 
-# ─── Esquemas de Autenticación ────────────────────────────────────
+# ─── Autenticación ────────────────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
     remember: bool = False
 
@@ -62,15 +54,24 @@ class LoginResponse(BaseModel):
     usuario: UserOut
 
 
-# ─── Esquemas de Setup ─────────────────────────────────────────────
+class LogoutResponse(BaseModel):
+    mensaje: str
+
+
+# ─── Setup ────────────────────────────────────────────────────────────────────
+
+class SetupStatusResponse(BaseModel):
+    setup_completed: bool
+    admin_exists: bool
+
 
 class SetupRequest(BaseModel):
-    nombre_completo: str
+    nombre_completo: str = Field(..., min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    negocio_nombre: str
-    negocio_direccion: str
-    negocio_rfc: str
+    negocio_nombre: str = Field(..., min_length=1, max_length=200)
+    negocio_direccion: str = Field(..., min_length=1)
+    negocio_rfc: str = Field(..., min_length=1, max_length=20)
     negocio_telefono: Optional[str] = None
 
 
@@ -79,12 +80,7 @@ class SetupResponse(BaseModel):
     usuario: UserOut
 
 
-class SetupStatusResponse(BaseModel):
-    setup_completed: bool
-    admin_exists: bool
-
-
-# ─── Esquemas de Preferencias ──────────────────────────────────────
+# ─── Preferencias ─────────────────────────────────────────────────────────────
 
 class PreferenciasOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -93,11 +89,15 @@ class PreferenciasOut(BaseModel):
     tema_visual: str = "light"
     zona_horaria: str = "America/Mexico_City"
 
-    @field_validator("zona_horaria", mode="before")
+    @field_validator("idioma", mode="before")
     @classmethod
-    def map_configuracion_regional(cls, v):
-        """Mapea configuracion_regional del modelo a zona_horaria del schema."""
-        return v
+    def extract_idioma(cls, v):
+        return v if isinstance(v, str) else str(v)
+
+    @field_validator("tema_visual", mode="before")
+    @classmethod
+    def extract_tema(cls, v):
+        return v if isinstance(v, str) else str(v)
 
 
 class PreferenciasUpdateRequest(BaseModel):
@@ -106,7 +106,7 @@ class PreferenciasUpdateRequest(BaseModel):
     zona_horaria: Optional[str] = None
 
 
-# ─── Esquemas de Recuperación ──────────────────────────────────────
+# ─── Recuperación de Contraseña ───────────────────────────────────────────────
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
@@ -141,7 +141,7 @@ class ChangePasswordResponse(BaseModel):
     mensaje: str
 
 
-# ─── Esquemas de Respuesta Genéricos ───────────────────────────────
+# ─── Respuestas Genéricas ─────────────────────────────────────────────────────
 
 class PaginatedUsersResponse(BaseModel):
     items: List[UserOut]
@@ -159,7 +159,3 @@ class UserActionResponse(BaseModel):
 class PerfilResponse(BaseModel):
     usuario: UserOut
     preferencias: PreferenciasOut
-
-
-class LogoutResponse(BaseModel):
-    mensaje: str

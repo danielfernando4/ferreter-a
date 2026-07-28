@@ -1,7 +1,10 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
+"""SQLAlchemy models for Autenticación, Usuarios y Configuración Inicial."""
 
+from datetime import datetime, timezone
+from sqlalchemy import (
+    Column, Integer, String, Boolean, DateTime, ForeignKey, Text,
+)
+from sqlalchemy.orm import relationship
 from database import Base
 
 
@@ -10,7 +13,7 @@ class Rol(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(50), unique=True, nullable=False)
-    descripcion = Column(String(255), nullable=False)
+    descripcion = Column(Text, nullable=True)
 
     usuarios = relationship("Usuario", back_populates="rol")
 
@@ -23,41 +26,57 @@ class Usuario(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre_completo = Column(String(150), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
+    email = Column(String(150), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     activo = Column(Boolean, default=True, nullable=False)
     rol_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
-    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
-    fecha_actualizacion = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc), nullable=False)
+    fecha_creacion = Column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        server_default="datetime('now')",
+        nullable=False,
+    )
+    fecha_actualizacion = Column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        onupdate=datetime.now(timezone.utc),
+        nullable=True,
+    )
     ultimo_acceso = Column(DateTime, nullable=True)
 
     rol = relationship("Rol", back_populates="usuarios")
-    preferencias = relationship("PreferenciasUsuario", back_populates="usuario", uselist=False)
     tokens_sesion = relationship("TokenSesion", back_populates="usuario", cascade="all, delete-orphan")
     tokens_restablecimiento = relationship("TokenRestablecimiento", back_populates="usuario", cascade="all, delete-orphan")
+    preferencias = relationship("PreferenciasUsuario", back_populates="usuario", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Usuario {self.email}>"
 
 
 class ConfiguracionNegocio(Base):
-    __tablename__ = "configuraciones_negocio"
+    __tablename__ = "configuracion_negocio"
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(200), nullable=False)
     direccion = Column(Text, nullable=False)
-    datos_fiscales = Column(String(255), nullable=False)
-    telefono = Column(String(50), nullable=True)
+    datos_fiscales = Column(String(300), nullable=False)
+    telefono = Column(String(20), nullable=True)
     email_contacto = Column(String(150), nullable=True)
+    rfc = Column(String(20), nullable=False)
     setup_completado = Column(Boolean, default=False, nullable=False)
-    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
+    fecha_creacion = Column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        server_default="datetime('now')",
+        nullable=False,
+    )
 
     def __repr__(self):
         return f"<ConfiguracionNegocio {self.nombre}>"
 
 
 class PreferenciasUsuario(Base):
-    __tablename__ = "preferencias_usuarios"
+    __tablename__ = "preferencias_usuario"
 
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), unique=True, nullable=False)
@@ -76,16 +95,21 @@ class TokenSesion(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    token_hash = Column(String(255), unique=True, nullable=False)
+    token_hash = Column(String(255), unique=True, nullable=False, index=True)
     es_persistente = Column(Boolean, default=False, nullable=False)
     fecha_expiracion = Column(DateTime, nullable=False)
-    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
+    fecha_creacion = Column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        server_default="datetime('now')",
+        nullable=False,
+    )
     activo = Column(Boolean, default=True, nullable=False)
 
     usuario = relationship("Usuario", back_populates="tokens_sesion")
 
     def __repr__(self):
-        return f"<TokenSesion usuario_id={self.usuario_id}>"
+        return f"<TokenSesion id={self.id}>"
 
 
 class TokenRestablecimiento(Base):
@@ -93,12 +117,17 @@ class TokenRestablecimiento(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    token_hash = Column(String(255), unique=True, nullable=False)
+    token_hash = Column(String(255), unique=True, nullable=False, index=True)
     fecha_expiracion = Column(DateTime, nullable=False)
     utilizado = Column(Boolean, default=False, nullable=False)
-    fecha_creacion = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
+    fecha_creacion = Column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        server_default="datetime('now')",
+        nullable=False,
+    )
 
     usuario = relationship("Usuario", back_populates="tokens_restablecimiento")
 
     def __repr__(self):
-        return f"<TokenRestablecimiento usuario_id={self.usuario_id}>"
+        return f"<TokenRestablecimiento id={self.id}>"

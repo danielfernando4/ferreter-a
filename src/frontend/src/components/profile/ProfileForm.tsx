@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react';
-import { Save, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import type { UserOut } from '../../types/auth';
-import * as api from '../../services/api';
+import { updatePerfil } from '../../services/api';
 
 interface ProfileFormProps {
   user: UserOut;
@@ -9,78 +9,73 @@ interface ProfileFormProps {
 }
 
 export default function ProfileForm({ user, onSave }: ProfileFormProps) {
-  const [nombreCompleto, setNombreCompleto] = useState(user.nombre_completo);
+  const [nombre, setNombre] = useState(user.nombre_completo);
   const [email, setEmail] = useState(user.email);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  async function handleSubmit(e: FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    if (!nombre.trim() || !email.trim()) {
+      setError('Todos los campos son obligatorios');
+      return;
+    }
     setIsLoading(true);
+    setError('');
+    setSuccess('');
     try {
-      const updated = await api.updatePerfil({
-        nombre_completo: nombreCompleto.trim(),
-        email: email.trim(),
-      });
+      const data: { nombre_completo?: string; email?: string } = {};
+      if (nombre.trim() !== user.nombre_completo) data.nombre_completo = nombre.trim();
+      if (email.trim() !== user.email) data.email = email.trim();
+      if (Object.keys(data).length === 0) {
+        setSuccess('Sin cambios que guardar');
+        setIsLoading(false);
+        return;
+      }
+      const updated = await updatePerfil(data);
       onSave(updated);
+      setSuccess('Perfil actualizado exitosamente');
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Error al actualizar el perfil';
+      const message = err instanceof Error ? err.message : 'Error al actualizar el perfil';
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="flex items-center gap-2 p-4 rounded-2xl bg-red-50 text-red-700 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       )}
-
+      {success && (
+        <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">{success}</div>
+      )}
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          Nombre Completo
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Nombre completo</label>
         <input
-          type="text"
-          value={nombreCompleto}
-          onChange={(e) => setNombreCompleto(e.target.value)}
-          required
-          className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900"
         />
       </div>
-
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          Correo Electrónico
-        </label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Correo electrónico</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-slate-900"
         />
       </div>
-
       <button
         type="submit"
         disabled={isLoading}
-        className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-xl transition-all flex items-center gap-2"
       >
-        {isLoading ? (
-          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-        ) : (
-          <>
-            <Save className="w-5 h-5" />
-            Guardar Cambios
-          </>
-        )}
+        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isLoading ? 'Guardando...' : 'Guardar cambios'}
       </button>
     </form>
   );

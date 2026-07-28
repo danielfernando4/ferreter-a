@@ -8,17 +8,16 @@ export interface UserOut {
   ultimo_acceso: string | null;
 }
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-  remember?: boolean;
-}
-
 export interface LoginResponse {
   token: string;
   token_type: string;
   expires_in: number;
   usuario: UserOut;
+}
+
+export interface SetupStatusResponse {
+  setup_completed: boolean;
+  admin_exists: boolean;
 }
 
 export interface SetupRequest {
@@ -34,11 +33,6 @@ export interface SetupRequest {
 export interface SetupResponse {
   mensaje: string;
   usuario: UserOut;
-}
-
-export interface SetupStatusResponse {
-  setup_completed: boolean;
-  admin_exists: boolean;
 }
 
 export interface ForgotPasswordRequest {
@@ -90,6 +84,11 @@ export interface UserActionResponse {
   usuario: UserOut;
 }
 
+export interface PerfilResponse {
+  usuario: UserOut;
+  preferencias: PreferenciasOut;
+}
+
 export interface PerfilUpdateRequest {
   nombre_completo?: string;
   email?: string;
@@ -117,11 +116,15 @@ export interface PreferenciasUpdateRequest {
   zona_horaria?: string;
 }
 
-export interface PerfilResponse {
-  usuario: UserOut;
-  preferencias: PreferenciasOut;
-}
-
 export interface LogoutResponse {
   mensaje: string;
+}
+
+export interface AuthState {
+  user: UserOut | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  setupRequired: boolean;
+  setupLoading: boolean;
 }

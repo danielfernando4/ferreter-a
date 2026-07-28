@@ -1,37 +1,53 @@
 import { useNavigate } from 'react-router-dom';
-import { Store } from 'lucide-react';
-import LoginForm from '../components/auth/LoginForm';
 import { useAuth } from '../hooks/useAuth';
+import LoginForm from '../components/auth/LoginForm';
 import { useEffect } from 'react';
 
 export default function LoginPage() {
+  const { isAuthenticated, setupRequired, setupLoading } = useAuth();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/usuarios', { replace: true });
+    if (!setupLoading && setupRequired) {
+      navigate('/setup-wizard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [setupRequired, setupLoading, navigate]);
 
-  function handleSuccess() {
-    navigate('/usuarios', { replace: true });
+  useEffect(() => {
+    if (!setupLoading && !setupRequired && isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, setupRequired, setupLoading, navigate]);
+
+  if (setupLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (setupRequired) {
+    return null;
+  }
+
+  if (isAuthenticated) {
+    return null;
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md mb-8 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center mx-auto mb-4">
-          <Store className="w-8 h-8 text-white" />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          <div className="text-center mb-8">
+            <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+              <span className="text-2xl font-bold text-blue-600">F</span>
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">Ferretería</h1>
+            <p className="text-slate-500 text-sm mt-1">Inicia sesión para continuar</p>
+          </div>
+          <LoginForm />
         </div>
-        <h1 className="text-3xl font-bold text-slate-900">Ferretería</h1>
-        <p className="text-slate-500 mt-2">
-          Inicia sesión para continuar
-        </p>
-      </div>
-
-      <div className="w-full bg-white rounded-2xl shadow-sm p-8">
-        <LoginForm onSuccess={handleSuccess} />
       </div>
     </div>
   );

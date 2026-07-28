@@ -1,4 +1,4 @@
-import { Edit, Trash2, Power, PowerOff } from 'lucide-react';
+import { Edit, UserX, UserCheck } from 'lucide-react';
 import type { UserOut } from '../../types/auth';
 
 interface UserTableProps {
@@ -8,12 +8,21 @@ interface UserTableProps {
   onReactivate: (user: UserOut) => void;
 }
 
-export default function UserTable({
-  usuarios,
-  onEdit,
-  onDeactivate,
-  onReactivate,
-}: UserTableProps) {
+const rolBadge = (rol: string) => {
+  const styles: Record<string, string> = {
+    administrador: 'bg-purple-100 text-purple-700',
+    vendedor: 'bg-blue-100 text-blue-700',
+    almacen: 'bg-green-100 text-green-700',
+  };
+  return styles[rol] || 'bg-slate-100 text-slate-700';
+};
+
+const statusBadge = (activo: boolean) =>
+  activo
+    ? 'bg-green-100 text-green-700'
+    : 'bg-red-100 text-red-700';
+
+export default function UserTable({ usuarios, onEdit, onDeactivate, onReactivate }: UserTableProps) {
   if (usuarios.length === 0) {
     return (
       <div className="text-center py-12 text-slate-500">
@@ -24,59 +33,36 @@ export default function UserTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full">
+      <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-200">
-            <th className="text-left px-4 py-3 text-sm font-semibold text-slate-700">
-              Nombre
-            </th>
-            <th className="text-left px-4 py-3 text-sm font-semibold text-slate-700">
-              Email
-            </th>
-            <th className="text-left px-4 py-3 text-sm font-semibold text-slate-700">
-              Rol
-            </th>
-            <th className="text-left px-4 py-3 text-sm font-semibold text-slate-700">
-              Estado
-            </th>
-            <th className="text-right px-4 py-3 text-sm font-semibold text-slate-700">
-              Acciones
-            </th>
+            <th className="text-left py-3 px-4 font-medium text-slate-500">Nombre</th>
+            <th className="text-left py-3 px-4 font-medium text-slate-500">Email</th>
+            <th className="text-left py-3 px-4 font-medium text-slate-500">Rol</th>
+            <th className="text-left py-3 px-4 font-medium text-slate-500">Estado</th>
+            <th className="text-right py-3 px-4 font-medium text-slate-500">Acciones</th>
           </tr>
         </thead>
         <tbody>
           {usuarios.map((user) => (
-            <tr
-              key={user.id}
-              className="border-b border-slate-100 hover:bg-slate-50 transition-all"
-            >
-              <td className="px-4 py-4 text-sm font-medium text-slate-900">
-                {user.nombre_completo}
-              </td>
-              <td className="px-4 py-4 text-sm text-slate-600">
-                {user.email}
-              </td>
-              <td className="px-4 py-4">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 capitalize">
+            <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <td className="py-3 px-4 font-medium text-slate-900">{user.nombre_completo}</td>
+              <td className="py-3 px-4 text-slate-600">{user.email}</td>
+              <td className="py-3 px-4">
+                <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-medium ${rolBadge(user.rol)}`}>
                   {user.rol}
                 </span>
               </td>
-              <td className="px-4 py-4">
-                <span
-                  className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                    user.activo
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-red-50 text-red-700'
-                  }`}
-                >
+              <td className="py-3 px-4">
+                <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-medium ${statusBadge(user.activo)}`}>
                   {user.activo ? 'Activo' : 'Inactivo'}
                 </span>
               </td>
-              <td className="px-4 py-4">
+              <td className="py-3 px-4 text-right">
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={() => onEdit(user)}
-                    className="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                    className="p-2 rounded-lg hover:bg-blue-50 text-blue-600"
                     title="Editar"
                   >
                     <Edit className="w-4 h-4" />
@@ -84,18 +70,18 @@ export default function UserTable({
                   {user.activo ? (
                     <button
                       onClick={() => onDeactivate(user)}
-                      className="p-2 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all"
+                      className="p-2 rounded-lg hover:bg-red-50 text-red-500"
                       title="Desactivar"
                     >
-                      <PowerOff className="w-4 h-4" />
+                      <UserX className="w-4 h-4" />
                     </button>
                   ) : (
                     <button
                       onClick={() => onReactivate(user)}
-                      className="p-2 rounded-xl text-slate-500 hover:text-green-600 hover:bg-green-50 transition-all"
+                      className="p-2 rounded-lg hover:bg-green-50 text-green-600"
                       title="Reactivar"
                     >
-                      <Power className="w-4 h-4" />
+                      <UserCheck className="w-4 h-4" />
                     </button>
                   )}
                 </div>

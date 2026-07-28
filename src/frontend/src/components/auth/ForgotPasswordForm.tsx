@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
+import { forgotPassword } from '../../services/api';
+import { Loader2, Mail, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Mail, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
-import * as api from '../../services/api';
 
 interface ForgotPasswordFormProps {
   onSuccess: () => void;
@@ -11,99 +11,67 @@ export default function ForgotPasswordForm({ onSuccess }: ForgotPasswordFormProp
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    if (!email.trim()) {
+      setError('Ingresa tu correo electrónico');
+      return;
+    }
     setIsLoading(true);
+    setError('');
     try {
-      await api.forgotPassword({ email });
-      setSent(true);
+      await forgotPassword({ email });
       onSuccess();
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Error al procesar la solicitud';
+      const message = err instanceof Error ? err.message : 'Error al procesar la solicitud';
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }
-
-  if (sent) {
-    return (
-      <div className="text-center space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center mx-auto">
-          <CheckCircle className="w-8 h-8 text-green-600" />
-        </div>
-        <h2 className="text-xl font-semibold text-slate-900">Correo Enviado</h2>
-        <p className="text-slate-600">
-          Si el correo ingresado está registrado, recibirás un enlace para restablecer tu contraseña.
-        </p>
-        <Link
-          to="/login"
-          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver al inicio de sesión
-        </Link>
-      </div>
-    );
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="flex items-center gap-2 p-4 rounded-2xl bg-red-50 text-red-700 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <span>{error}</span>
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
         </div>
       )}
-
-      <p className="text-sm text-slate-600">
-        Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
-      </p>
-
+      <div className="text-center">
+        <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+          <Mail className="w-6 h-6 text-blue-600" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">Recuperar contraseña</h2>
+        <p className="text-sm text-slate-500">
+          Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
+        </p>
+      </div>
       <div>
-        <label
-          htmlFor="forgot-email"
-          className="block text-sm font-medium text-slate-700 mb-1.5"
-        >
-          Correo Electrónico
+        <label htmlFor="reset-email" className="block text-sm font-medium text-slate-700 mb-1">
+          Correo electrónico
         </label>
         <input
-          id="forgot-email"
+          id="reset-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
-          placeholder="tu@correo.com"
-          className="w-full px-4 py-3 rounded-2xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+          placeholder="correo@ejemplo.com"
+          autoComplete="email"
         />
       </div>
-
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2"
       >
-        {isLoading ? (
-          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-        ) : (
-          <>
-            <Mail className="w-5 h-5" />
-            Enviar Enlace
-          </>
-        )}
+        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isLoading ? 'Enviando...' : 'Enviar enlace de recuperación'}
       </button>
-
       <div className="text-center">
-        <Link
-          to="/login"
-          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver al inicio de sesión
+        <Link to="/login" className="text-sm text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1">
+          <ArrowLeft className="w-3 h-3" /> Volver al inicio de sesión
         </Link>
       </div>
     </form>

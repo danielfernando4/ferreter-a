@@ -1,26 +1,24 @@
-import { Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { Loader2 } from 'lucide-react';
 
 export default function HomePage() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { user, isLoading } = useAuth();
+  const navigate = useNavigate();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    navigate('/usuarios', { replace: true });
+  }, [user, isLoading, navigate]);
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Redirect based on role
-  if (user?.rol === 'administrador') {
-    return <Navigate to="/usuarios" replace />;
-  }
-
-  // Default redirect
-  return <Navigate to="/perfil" replace />;
+  return (
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+    </div>
+  );
 }

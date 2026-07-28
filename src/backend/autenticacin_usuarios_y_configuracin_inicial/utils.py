@@ -1,12 +1,15 @@
+import bcrypt
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-import bcrypt
-from jose import jwt
+from jose import jwt, JWTError
 
 from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REMEMBER_TOKEN_EXPIRE_DAYS, RESET_TOKEN_EXPIRE_HOURS
 
+
+# --- Password Hashing ---
 
 def _normalize_password(pw: str) -> str:
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
@@ -22,36 +25,46 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(normalized, hashed.encode())
 
 
-def generate_token(usuario_id: int, remember: bool = False) -> str:
-    """Generate a JWT token for the given user."""
+# --- JWT Token Utilities ---
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_access_token(token: str) -> Optional[dict]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        return None
+
+
+def get_token_expires_seconds(remember: bool = False) -> int:
     if remember:
-        expire = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
-    else:
-        expire = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    expires_in = int(expire.total_seconds())
-    payload = {
-        "sub": str(usuario_id),
-        "exp": datetime.now(timezone.utc) + expire,
-        "type": "access",
-        "remember": remember,
-    }
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    return token, expires_in
+        return REMEMBER_TOKEN_EXPIRE_DAYS * 24 * 3600
+    return ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
 
-def decode_token(token: str) -> dict:
-    """Decode a JWT token, returning the payload. Raises on invalid/expired."""
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+def get_token_expires_delta(remember: bool = False) -> timedelta:
+    if remember:
+        return timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
+    return timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
+
+# --- Random Token Generators ---
 
 def generate_reset_token() -> str:
-    """Generate a cryptographically secure random token for password reset."""
+    return secrets.token_urlsafe(48)
+
+
+def generate_session_token() -> str:
     return secrets.token_urlsafe(48)
 
 
 def hash_token(token: str) -> str:
-    """Hash a token for storage (SHA-256)."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 

@@ -7,16 +7,13 @@ interface ProtectedRouteProps {
   requiredRole?: string;
 }
 
-export default function ProtectedRoute({
-  children,
-  requiredRole,
-}: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent" />
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
       </div>
     );
   }
@@ -25,7 +22,10 @@ export default function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user?.rol !== requiredRole) {
+  if (requiredRole && user && user.rol !== requiredRole) {
+    if (user.rol === 'administrador') {
+      return <>{children}</>;
+    }
     return <Navigate to="/" replace />;
   }
 

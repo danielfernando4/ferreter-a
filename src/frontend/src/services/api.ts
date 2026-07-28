@@ -1,15 +1,14 @@
 import type {
-  LoginRequest,
+  UserOut,
   LoginResponse,
+  SetupStatusResponse,
   SetupRequest,
   SetupResponse,
-  SetupStatusResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   VerifyTokenResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
-  UserOut,
   UserCreateRequest,
   UserUpdateRequest,
   PaginatedUsersResponse,
@@ -29,20 +28,16 @@ class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
     super(message);
-    this.name = 'ApiError';
     this.status = status;
+    this.name = 'ApiError';
   }
 }
 
-function getToken(): string | null {
-  return localStorage.getItem('token');
-}
-
 async function request<T>(
-  path: string,
+  endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getToken();
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -50,158 +45,135 @@ async function request<T>(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers,
   });
-
   if (!response.ok) {
-    let message = 'Error en la solicitud';
+    let message = `Error ${response.status}`;
     try {
-      const errorData = await response.json();
-      message = errorData.detail || errorData.mensaje || message;
+      const body = await response.json();
+      message = body.detail || body.mensaje || message;
     } catch {
       // ignore
     }
     throw new ApiError(message, response.status);
   }
-
   return response.json();
 }
 
-// --- Public Endpoints ---
+// ---- PÚBLICAS ----
 
-export async function checkSetup(): Promise<SetupStatusResponse> {
+export function checkSetup(): Promise<SetupStatusResponse> {
   return request<SetupStatusResponse>('/auth/check-setup');
 }
 
-export async function runSetup(data: SetupRequest): Promise<SetupResponse> {
+export function runSetup(data: SetupRequest): Promise<SetupResponse> {
   return request<SetupResponse>('/auth/setup', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function login(data: LoginRequest): Promise<LoginResponse> {
+export function login(data: { email: string; password: string; remember?: boolean }): Promise<LoginResponse> {
   return request<LoginResponse>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function forgotPassword(
-  data: ForgotPasswordRequest
-): Promise<ForgotPasswordResponse> {
+export function forgotPassword(data: ForgotPasswordRequest): Promise<ForgotPasswordResponse> {
   return request<ForgotPasswordResponse>('/auth/forgot-password', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function verifyResetToken(
-  token: string
-): Promise<VerifyTokenResponse> {
-  return request<VerifyTokenResponse>(`/auth/verify-reset-token/${token}`);
+export function verifyResetToken(token: string): Promise<VerifyTokenResponse> {
+  return request<VerifyTokenResponse>(`/auth/verify-reset-token/${encodeURIComponent(token)}`);
 }
 
-export async function resetPassword(
-  data: ResetPasswordRequest
-): Promise<ResetPasswordResponse> {
+export function resetPassword(data: ResetPasswordRequest): Promise<ResetPasswordResponse> {
   return request<ResetPasswordResponse>('/auth/reset-password', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-// --- Protected Endpoints ---
+// ---- PROTEGIDAS ----
 
-export async function getMe(): Promise<UserOut> {
+export function getMe(): Promise<UserOut> {
   return request<UserOut>('/auth/me');
 }
 
-export async function logout(): Promise<LogoutResponse> {
+export function logout(): Promise<LogoutResponse> {
   return request<LogoutResponse>('/auth/logout', {
     method: 'POST',
   });
 }
 
-export async function listUsuarios(
-  search?: string,
-  page: number = 1,
-  pageSize: number = 10
-): Promise<PaginatedUsersResponse> {
-  const params = new URLSearchParams();
-  if (search) params.set('search', search);
-  params.set('page', String(page));
-  params.set('page_size', String(pageSize));
-  return request<PaginatedUsersResponse>(`/usuarios?${params.toString()}`);
+export function listUsuarios(params: { search?: string; page?: number; page_size?: number }): Promise<PaginatedUsersResponse> {
+  const query = new URLSearchParams();
+  if (params.search) query.set('search', params.search);
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.page_size !== undefined) query.set('page_size', String(params.page_size));
+  const qs = query.toString();
+  return request<PaginatedUsersResponse>(`/usuarios${qs ? `?${qs}` : ''}`);
 }
 
-export async function getUsuario(id: number): Promise<UserOut> {
+export function getUsuario(id: number): Promise<UserOut> {
   return request<UserOut>(`/usuarios/${id}`);
 }
 
-export async function createUsuario(
-  data: UserCreateRequest
-): Promise<UserOut> {
+export function createUsuario(data: UserCreateRequest): Promise<UserOut> {
   return request<UserOut>('/usuarios', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function updateUsuario(
-  id: number,
-  data: UserUpdateRequest
-): Promise<UserOut> {
+export function updateUsuario(id: number, data: UserUpdateRequest): Promise<UserOut> {
   return request<UserOut>(`/usuarios/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
-export async function deactivateUsuario(id: number): Promise<UserActionResponse> {
+export function deactivateUsuario(id: number): Promise<UserActionResponse> {
   return request<UserActionResponse>(`/usuarios/${id}/deactivate`, {
     method: 'PATCH',
   });
 }
 
-export async function reactivateUsuario(id: number): Promise<UserActionResponse> {
+export function reactivateUsuario(id: number): Promise<UserActionResponse> {
   return request<UserActionResponse>(`/usuarios/${id}/reactivate`, {
     method: 'PATCH',
   });
 }
 
-export async function getPerfil(): Promise<PerfilResponse> {
+export function getPerfil(): Promise<PerfilResponse> {
   return request<PerfilResponse>('/perfil');
 }
 
-export async function updatePerfil(
-  data: PerfilUpdateRequest
-): Promise<UserOut> {
+export function updatePerfil(data: PerfilUpdateRequest): Promise<UserOut> {
   return request<UserOut>('/perfil', {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
-export async function changePassword(
-  data: ChangePasswordRequest
-): Promise<ChangePasswordResponse> {
+export function changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
   return request<ChangePasswordResponse>('/perfil/cambiar-password', {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
-export async function getPreferencias(): Promise<PreferenciasOut> {
+export function getPreferencias(): Promise<PreferenciasOut> {
   return request<PreferenciasOut>('/perfil/preferencias');
 }
 
-export async function updatePreferencias(
-  data: PreferenciasUpdateRequest
-): Promise<PreferenciasOut> {
+export function updatePreferencias(data: PreferenciasUpdateRequest): Promise<PreferenciasOut> {
   return request<PreferenciasOut>('/perfil/preferencias', {
     method: 'PUT',
     body: JSON.stringify(data),

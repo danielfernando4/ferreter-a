@@ -1,46 +1,48 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import * as api from '../../services/api';
+import type { UserOut, UserUpdateRequest } from '../../types/auth';
 import UserForm from '../components/users/UserForm';
-import * as api from '../services/api';
-import { ApiError } from '../services/api';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import type { UserOut } from '../types/auth';
+import { ArrowLeft } from 'lucide-react';
 
 export default function EditUserPage() {
-  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
   const [user, setUser] = useState<UserOut | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [apiError, setApiError] = useState('');
+  const [error, setError] = useState('');
+  const [globalError, setGlobalError] = useState('');
 
   useEffect(() => {
-    if (!id) return;
-    const loadUser = async () => {
+    if (!id) {
+      setError('ID de usuario no proporcionado');
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchUser = async () => {
       try {
         const data = await api.getUsuario(Number(id));
         setUser(data);
       } catch {
-        setApiError('Error al cargar los datos del usuario.');
+        setError('Error al cargar los datos del usuario');
       } finally {
         setIsLoading(false);
       }
     };
-    loadUser();
+    fetchUser();
   }, [id]);
 
-  const handleSave = async (data: { nombre_completo: string; email: string; rol: string }) => {
+  const handleSave = async (data: UserUpdateRequest) => {
+    setGlobalError('');
     try {
       await api.updateUsuario(Number(id), data);
       navigate('/usuarios');
-    } catch (err) {
-      if (err instanceof ApiError) {
-        if (err.status === 409) {
-          setApiError('Ya existe un usuario con ese correo electrónico.');
-        } else {
-          setApiError(err.message);
-        }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setGlobalError(err.message);
       } else {
-        setApiError('Error al actualizar el usuario.');
+        setGlobalError('Error al actualizar el usuario');
       }
       throw err;
     }
@@ -48,44 +50,61 @@ export default function EditUserPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 size={28} className="animate-spin text-blue-600" />
+      <div className="flex justify-center py-12">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
       </div>
     );
   }
 
-  if (!user) {
+  if (error && !user) {
     return (
-      <div className="text-center py-16">
-        <p className="text-red-600 font-medium">Usuario no encontrado.</p>
-        <Link to="/usuarios" className="text-blue-600 hover:text-blue-700 font-medium mt-2 inline-block">
+      <div className="space-y-6">
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-800"
+        >
+          <ArrowLeft className="h-4 w-4" />
           Volver a usuarios
-        </Link>
+        </button>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
+          <p className="text-slate-500">{error}</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <Link
-          to="/usuarios"
-          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 font-medium mb-2"
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="p-2 rounded-xl hover:bg-slate-100 transition-all"
         >
-          <ArrowLeft size={16} />
-          Volver a usuarios
-        </Link>
-        <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
-        <p className="text-sm text-slate-500 mt-1">{user.nombre_completo}</p>
+          <ArrowLeft className="h-5 w-5 text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Editando: {user?.nombre_completo}
+          </p>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 max-w-lg">
-        {apiError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-            {apiError}
-          </div>
+      {globalError && (
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+          {globalError}
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+        {user && (
+          <UserForm
+            mode="edit"
+            initialData={user}
+            onSave={handleSave}
+            onCancel={() => navigate('/usuarios')}
+          />
         )}
-        <UserForm initialData={user} onSave={handleSave} mode="edit" />
       </div>
     </div>
   );

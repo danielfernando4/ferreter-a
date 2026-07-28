@@ -3,14 +3,18 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
+from jose import jwt
 
 from config import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    ALGORITHM,
     REMEMBER_TOKEN_EXPIRE_DAYS,
     RESET_TOKEN_EXPIRE_HOURS,
     SECRET_KEY,
 )
 
+
+# ─── Password Hashing ───────────────────────────────────────────────────────
 
 def _normalize_password(pw: str) -> str:
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
@@ -26,31 +30,46 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(normalized, hashed.encode())
 
 
-def generate_token() -> str:
-    """Generate a cryptographically secure random token."""
+# ─── Token Generation ───────────────────────────────────────────────────────
+
+def generate_session_token() -> str:
     return secrets.token_urlsafe(48)
 
 
 def hash_token(token: str) -> str:
-    """Hash a token for storage using SHA-256."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def get_token_expiry(remember: bool = False) -> datetime:
-    """Get expiry datetime for a session token."""
+def create_jwt_token(user_id: int, remember: bool = False) -> tuple[str, int]:
+    """Returns (token, expires_in_seconds)."""
     if remember:
-        delta = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
+        expires_delta = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
     else:
-        delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    return datetime.now(timezone.utc) + delta
+        expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    expires_in = int(expires_delta.total_seconds())
+    expire = datetime.now(timezone.utc) + expires_delta
+
+    to_encode = {
+        "sub": str(user_id),
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+    }
+    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return token, expires_in
+
+
+def decode_jwt_token(token: str) -> dict | None:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except Exception:
+        return None
+
+
+def generate_reset_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def get_reset_token_expiry() -> datetime:
-    """Get expiry datetime for a reset token."""
     return datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_EXPIRE_HOURS)
-
-
-def get_expires_in_seconds(expiry: datetime) -> int:
-    """Get the number of seconds until expiry."""
-    remaining = (expiry - datetime.now(timezone.utc)).total_seconds()
-    return max(0, int(remaining))

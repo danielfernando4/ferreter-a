@@ -1,9 +1,11 @@
 from datetime import datetime
 from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
-# --- Esquemas de Usuario ---
+# ─── Usuario ────────────────────────────────────────────────────────────────
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -12,7 +14,7 @@ class UserOut(BaseModel):
     email: str
     rol: str
     activo: bool
-    fecha_registro: datetime
+    fecha_creacion: datetime
     ultimo_acceso: Optional[datetime] = None
 
     @field_validator("rol", mode="before")
@@ -22,31 +24,41 @@ class UserOut(BaseModel):
             return v.nombre
         return str(v)
 
-    @field_validator("fecha_registro", mode="before")
+    @field_validator("fecha_creacion", mode="before")
     @classmethod
-    def extract_fecha_creacion(cls, v):
-        if hasattr(v, "fecha_creacion"):
-            return v.fecha_creacion
+    def ensure_datetime(cls, v):
+        if isinstance(v, str):
+            return datetime.fromisoformat(v)
+        return v
+
+    @field_validator("ultimo_acceso", mode="before")
+    @classmethod
+    def ensure_optional_datetime(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return datetime.fromisoformat(v)
         return v
 
 
 class UserCreateRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1, max_length=200)
+    nombre_completo: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
     password: str = Field(..., min_length=6)
     rol: str = Field(..., min_length=1)
 
 
 class UserUpdateRequest(BaseModel):
-    nombre_completo: Optional[str] = Field(None, min_length=1, max_length=200)
+    nombre_completo: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[EmailStr] = None
     rol: Optional[str] = None
 
 
-# --- Esquemas de Autenticación ---
+# ─── Autenticación ──────────────────────────────────────────────────────────
+
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
     remember: bool = False
 
 
@@ -57,15 +69,16 @@ class LoginResponse(BaseModel):
     usuario: UserOut
 
 
-# --- Esquemas de Setup ---
+# ─── Setup ──────────────────────────────────────────────────────────────────
+
 class SetupRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1, max_length=200)
+    nombre_completo: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    negocio_nombre: str = Field(..., min_length=1, max_length=255)
+    negocio_nombre: str = Field(..., min_length=1)
     negocio_direccion: str = Field(..., min_length=1)
-    negocio_rfc: str = Field(..., min_length=1, max_length=20)
-    negocio_telefono: Optional[str] = Field(None, max_length=50)
+    negocio_rfc: str = Field(..., min_length=1)
+    negocio_telefono: Optional[str] = None
 
 
 class SetupResponse(BaseModel):
@@ -73,15 +86,15 @@ class SetupResponse(BaseModel):
     usuario: UserOut
 
 
-# --- Esquemas de Setup Status ---
 class SetupStatusResponse(BaseModel):
     setup_completed: bool
     admin_exists: bool
 
 
-# --- Esquemas de Preferencias ---
+# ─── Preferencias ───────────────────────────────────────────────────────────
+
 class PreferenciasOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     idioma: str = "es"
     tema_visual: str = "light"
@@ -94,9 +107,10 @@ class PreferenciasUpdateRequest(BaseModel):
     zona_horaria: Optional[str] = None
 
 
-# --- Esquemas de Recuperación ---
+# ─── Recuperación de Contraseña ─────────────────────────────────────────────
+
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    email: str = Field(..., min_length=1)
 
 
 class ForgotPasswordResponse(BaseModel):
@@ -109,7 +123,7 @@ class VerifyTokenResponse(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
+    token: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=6)
     confirm_password: str = Field(..., min_length=6)
 
@@ -119,7 +133,7 @@ class ResetPasswordResponse(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
+    current_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=6)
     confirm_password: str = Field(..., min_length=6)
 
@@ -128,7 +142,8 @@ class ChangePasswordResponse(BaseModel):
     mensaje: str
 
 
-# --- Esquemas de Respuesta Genéricos ---
+# ─── Respuestas Genéricas ───────────────────────────────────────────────────
+
 class PaginatedUsersResponse(BaseModel):
     items: list[UserOut]
     total: int

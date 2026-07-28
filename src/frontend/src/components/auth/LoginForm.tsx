@@ -1,17 +1,13 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import * as api from '../../services/api';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { ApiError } from '../../services/api';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 
-interface LoginFormProps {
-  onSuccess?: () => void;
-}
-
-export default function LoginForm({ onSuccess }: LoginFormProps) {
+export default function LoginForm() {
   const navigate = useNavigate();
   const { login } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -23,20 +19,16 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+
     try {
-      const res = await api.login({ email, password, remember });
-      login(res.token, res.usuario);
-      onSuccess?.();
-      if (res.usuario.rol === 'administrador') {
-        navigate('/usuarios');
+      const response = await api.login({ email, password, remember });
+      login(response.token, response.usuario, remember);
+      navigate('/');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError('Credenciales inválidas. Verifica tu correo y contraseña.');
       } else {
-        navigate('/');
-      }
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError('Credenciales inválidas. Verifica tu email y contraseña.');
-      } else {
-        setError('Error de conexión. Intenta de nuevo.');
+        setError('Error al iniciar sesión. Intenta de nuevo.');
       }
     } finally {
       setIsLoading(false);
@@ -46,7 +38,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -62,7 +54,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="correo@ejemplo.com"
           required
-          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
         />
       </div>
 
@@ -76,16 +68,16 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder="Ingresa tu contraseña"
             required
-            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900 pr-10"
+            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
           >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
       </div>
@@ -100,21 +92,28 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           />
           <span className="text-sm text-slate-600">Recordar sesión</span>
         </label>
-        <Link
-          to="/forgot-password"
+        <button
+          type="button"
+          onClick={() => navigate('/forgot-password')}
           className="text-sm text-blue-600 hover:text-blue-700 font-medium"
         >
           ¿Olvidaste tu contraseña?
-        </Link>
+        </button>
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2"
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
-        {isLoading ? <Loader2 size={20} className="animate-spin" /> : null}
-        {isLoading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+        {isLoading ? (
+          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <>
+            <LogIn className="h-4 w-4" />
+            Iniciar sesión
+          </>
+        )}
       </button>
     </form>
   );

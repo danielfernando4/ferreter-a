@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,11 +11,9 @@ class Rol(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     nombre: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    descripcion: Mapped[str] = mapped_column(Text, nullable=False)
+    descripcion: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
-    usuarios: Mapped[list["Usuario"]] = relationship(
-        "Usuario", back_populates="rol", lazy="selectin"
-    )
+    usuarios: Mapped[list["Usuario"]] = relationship("Usuario", back_populates="rol")
 
     def __repr__(self) -> str:
         return f"<Rol {self.nombre}>"
@@ -24,59 +23,35 @@ class Usuario(Base):
     __tablename__ = "usuarios"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    nombre_completo: Mapped[str] = mapped_column(String(200), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    nombre_completo: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     rol_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id"), nullable=False)
     fecha_creacion: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=datetime.now(timezone.utc),
-        server_default=func.now(),
-        nullable=False,
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), nullable=False
     )
     fecha_actualizacion: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        DateTime,
         default=datetime.now(timezone.utc),
         server_default=func.now(),
         onupdate=datetime.now(timezone.utc),
         nullable=False,
     )
 
-    rol: Mapped["Rol"] = relationship("Rol", back_populates="usuarios", lazy="selectin")
-    preferencias: Mapped[list["PreferenciasUsuario"]] = relationship(
-        "PreferenciasUsuario", back_populates="usuario", lazy="selectin", uselist=False
+    rol: Mapped["Rol"] = relationship("Rol", back_populates="usuarios")
+    preferencias: Mapped["PreferenciasUsuario"] = relationship(
+        "PreferenciasUsuario", back_populates="usuario", uselist=False, cascade="all, delete-orphan"
     )
     tokens_sesion: Mapped[list["TokenSesion"]] = relationship(
-        "TokenSesion", back_populates="usuario", lazy="selectin"
+        "TokenSesion", back_populates="usuario", cascade="all, delete-orphan"
     )
     tokens_restablecimiento: Mapped[list["TokenRestablecimiento"]] = relationship(
-        "TokenRestablecimiento", back_populates="usuario", lazy="selectin"
+        "TokenRestablecimiento", back_populates="usuario", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
         return f"<Usuario {self.email}>"
-
-
-class ConfiguracionNegocio(Base):
-    __tablename__ = "configuracion_negocio"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    nombre: Mapped[str] = mapped_column(String(255), nullable=False)
-    direccion: Mapped[str] = mapped_column(Text, nullable=False)
-    datos_fiscales: Mapped[str] = mapped_column(String(255), nullable=False)
-    telefono: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    email_contacto: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    setup_completado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    fecha_creacion: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=datetime.now(timezone.utc),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    def __repr__(self) -> str:
-        return f"<ConfiguracionNegocio {self.nombre}>"
 
 
 class PreferenciasUsuario(Base):
@@ -92,64 +67,62 @@ class PreferenciasUsuario(Base):
         String(20), default="es-MX", nullable=False
     )
 
-    usuario: Mapped["Usuario"] = relationship(
-        "Usuario", back_populates="preferencias", lazy="selectin"
-    )
+    usuario: Mapped["Usuario"] = relationship("Usuario", back_populates="preferencias")
 
     def __repr__(self) -> str:
-        return f"<PreferenciasUsuario user={self.usuario_id}>"
+        return f"<PreferenciasUsuario usuario_id={self.usuario_id}>"
 
 
 class TokenSesion(Base):
     __tablename__ = "tokens_sesion"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    usuario_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("usuarios.id"), nullable=False
-    )
-    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    usuario_id: Mapped[int] = mapped_column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     es_persistente: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    fecha_expiracion: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    fecha_expiracion: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     fecha_creacion: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=datetime.now(timezone.utc),
-        server_default=func.now(),
-        nullable=False,
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), nullable=False
     )
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    usuario: Mapped["Usuario"] = relationship(
-        "Usuario", back_populates="tokens_sesion", lazy="selectin"
-    )
+    usuario: Mapped["Usuario"] = relationship("Usuario", back_populates="tokens_sesion")
 
     def __repr__(self) -> str:
-        return f"<TokenSesion user={self.usuario_id}>"
+        return f"<TokenSesion usuario_id={self.usuario_id}>"
 
 
 class TokenRestablecimiento(Base):
     __tablename__ = "tokens_restablecimiento"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    usuario_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("usuarios.id"), nullable=False
-    )
-    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    fecha_expiracion: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    usuario_id: Mapped[int] = mapped_column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    fecha_expiracion: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     utilizado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     fecha_creacion: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=datetime.now(timezone.utc),
-        server_default=func.now(),
-        nullable=False,
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), nullable=False
     )
 
-    usuario: Mapped["Usuario"] = relationship(
-        "Usuario", back_populates="tokens_restablecimiento", lazy="selectin"
+    usuario: Mapped["Usuario"] = relationship("Usuario", back_populates="tokens_restablecimiento")
+
+    def __repr__(self) -> str:
+        return f"<TokenRestablecimiento usuario_id={self.usuario_id}>"
+
+
+class ConfiguracionNegocio(Base):
+    __tablename__ = "configuracion_negocio"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(255), nullable=False)
+    direccion: Mapped[str] = mapped_column(Text, nullable=False)
+    datos_fiscales: Mapped[str] = mapped_column(String(255), nullable=False)
+    telefono: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    email_contacto: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    setup_completado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fecha_creacion: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.now(timezone.utc), server_default=func.now(), nullable=False
     )
 
     def __repr__(self) -> str:
-        return f"<TokenRestablecimiento user={self.usuario_id}>"
+        return f"<ConfiguracionNegocio {self.nombre}>"

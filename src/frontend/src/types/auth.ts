@@ -1,3 +1,4 @@
+// --- User Types ---
 export interface UserOut {
   id: number;
   nombre_completo: string;
@@ -6,39 +7,6 @@ export interface UserOut {
   activo: boolean;
   fecha_registro: string;
   ultimo_acceso: string | null;
-}
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-  remember?: boolean;
-}
-
-export interface LoginResponse {
-  token: string;
-  token_type: string;
-  expires_in: number;
-  usuario: UserOut;
-}
-
-export interface SetupRequest {
-  nombre_completo: string;
-  email: string;
-  password: string;
-  negocio_nombre: string;
-  negocio_direccion: string;
-  negocio_rfc: string;
-  negocio_telefono?: string | null;
-}
-
-export interface SetupResponse {
-  mensaje: string;
-  usuario: UserOut;
-}
-
-export interface SetupStatusResponse {
-  setup_completed: boolean;
-  admin_exists: boolean;
 }
 
 export interface UserCreateRequest {
@@ -54,19 +22,55 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
-export interface PaginatedUsersResponse {
-  items: UserOut[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
+// --- Auth Types ---
+export interface LoginRequest {
+  email: string;
+  password: string;
+  remember?: boolean;
 }
 
-export interface UserActionResponse {
+export interface LoginResponse {
+  token: string;
+  token_type: string;
+  expires_in: number;
+  usuario: UserOut;
+}
+
+// --- Setup Types ---
+export interface SetupRequest {
+  nombre_completo: string;
+  email: string;
+  password: string;
+  negocio_nombre: string;
+  negocio_direccion: string;
+  negocio_rfc: string;
+  negocio_telefono?: string;
+}
+
+export interface SetupResponse {
   mensaje: string;
   usuario: UserOut;
 }
 
+export interface SetupStatusResponse {
+  setup_completed: boolean;
+  admin_exists: boolean;
+}
+
+// --- Preferences Types ---
+export interface PreferenciasOut {
+  idioma: string;
+  tema_visual: string;
+  zona_horaria: string;
+}
+
+export interface PreferenciasUpdateRequest {
+  idioma?: string;
+  tema_visual?: string;
+  zona_horaria?: string;
+}
+
+// --- Password Recovery Types ---
 export interface ForgotPasswordRequest {
   email: string;
 }
@@ -100,16 +104,18 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
-export interface PreferenciasOut {
-  idioma: string;
-  tema_visual: string;
-  zona_horaria: string;
+// --- Generic Types ---
+export interface PaginatedUsersResponse {
+  items: UserOut[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
-export interface PreferenciasUpdateRequest {
-  idioma?: string;
-  tema_visual?: string;
-  zona_horaria?: string;
+export interface UserActionResponse {
+  mensaje: string;
+  usuario: UserOut;
 }
 
 export interface PerfilResponse {
@@ -126,9 +132,11 @@ export interface LogoutResponse {
   mensaje: string;
 }
 
-export type AuthState = {
+// --- Auth Context State ---
+export interface AuthState {
   user: UserOut | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-};
+  setupRequired: boolean;
+}

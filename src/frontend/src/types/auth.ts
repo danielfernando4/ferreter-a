@@ -21,6 +21,11 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
+export interface SetupStatusResponse {
+  setup_completed: boolean;
+  admin_exists: boolean;
+}
+
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -36,9 +41,30 @@ export interface SetupResponse {
   usuario: UserOut;
 }
 
-export interface SetupStatusResponse {
-  setup_completed: boolean;
-  admin_exists: boolean;
+export interface UserCreateRequest {
+  nombre_completo: string;
+  email: string;
+  password: string;
+  rol: string;
+}
+
+export interface UserUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+  rol?: string;
+}
+
+export interface PaginatedUsersResponse {
+  items: UserOut[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface UserActionResponse {
+  mensaje: string;
+  usuario: UserOut;
 }
 
 export interface ForgotPasswordRequest {
@@ -64,34 +90,14 @@ export interface ResetPasswordResponse {
   mensaje: string;
 }
 
-export interface LogoutResponse {
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}
+
+export interface ChangePasswordResponse {
   mensaje: string;
-}
-
-export interface UserCreateRequest {
-  nombre_completo: string;
-  email: string;
-  password: string;
-  rol: string;
-}
-
-export interface UserUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
-  rol?: string;
-}
-
-export interface UserActionResponse {
-  mensaje: string;
-  usuario: UserOut;
-}
-
-export interface PaginatedUsersResponse {
-  items: UserOut[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
 }
 
 export interface PreferenciasOut {
@@ -116,12 +122,6 @@ export interface PerfilUpdateRequest {
   email?: string;
 }
 
-export interface ChangePasswordRequest {
-  current_password: string;
-  new_password: string;
-  confirm_password: string;
-}
-
-export interface ChangePasswordResponse {
+export interface LogoutResponse {
   mensaje: string;
 }

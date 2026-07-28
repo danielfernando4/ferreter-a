@@ -1,44 +1,64 @@
+import { useNavigate } from 'react-router-dom';
+import { AppLayout } from '../components/layout/AppLayout';
+import { UserForm } from '../components/users/UserForm';
+import * as api from '../services/api';
+import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { createUsuario } from '../services/api';
-import UserForm from '../components/users/UserForm';
-import { ArrowLeft, CheckCircle } from 'lucide-react';
 
-export default function CreateUserPage() {
+export function CreateUserPage() {
   const navigate = useNavigate();
-  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSave = async (data: any) => {
-    await createUsuario(data);
-    setSuccess(true);
-    setTimeout(() => navigate('/usuarios', { replace: true }), 1500);
+  const handleSave = async (data: Record<string, string>) => {
+    setError('');
+    try {
+      await api.createUsuario({
+        nombre_completo: data.nombre_completo,
+        email: data.email,
+        password: data.password,
+        rol: data.rol,
+      });
+      navigate('/usuarios');
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        const apiErr = err as { status: number; message: string };
+        if (apiErr.status === 409) {
+          setError('El correo electrónico ya está registrado');
+        } else if (apiErr.status === 400) {
+          setError(apiErr.message || 'Datos inválidos');
+        } else {
+          setError('Error al crear el usuario');
+        }
+      } else {
+        setError('Error al conectar con el servidor');
+      }
+      throw err;
+    }
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-4 mb-6">
-        <Link
-          to="/usuarios"
-          className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-all"
+    <AppLayout title="Crear Usuario">
+      <div className="max-w-2xl">
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-6 transition-all"
         >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Nuevo usuario</h1>
-          <p className="text-sm text-slate-500 mt-1">Crea un nuevo usuario en el sistema</p>
+          <ArrowLeft className="w-4 h-4" />
+          Volver a usuarios
+        </button>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:p-8">
+          <h2 className="text-lg font-semibold text-slate-900 mb-6">Nuevo usuario</h2>
+
+          {error && (
+            <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          <UserForm mode="create" onSave={handleSave} />
         </div>
       </div>
-
-      {success ? (
-        <div className="bg-green-50 text-green-600 text-sm px-4 py-3 rounded-xl border border-green-200 flex items-center gap-2 max-w-lg">
-          <CheckCircle className="h-4 w-4" />
-          Usuario creado exitosamente. Redirigiendo...
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <UserForm onSave={handleSave} mode="create" />
-        </div>
-      )}
-    </div>
+    </AppLayout>
   );
 }

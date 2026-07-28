@@ -4,11 +4,8 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
-# ─── Enumeración de roles ───────────────────────────────────────────────
-ROLES_VALIDOS = ["administrador", "vendedor", "almacen"]
+# ─── Esquemas de Usuario ───────────────────────────────────────────────
 
-
-# ─── Esquemas de Usuario ────────────────────────────────────────────────
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -17,56 +14,37 @@ class UserOut(BaseModel):
     email: str
     rol: str
     activo: bool
-    fecha_registro: datetime
+    fecha_registro: datetime = Field(alias="fecha_creacion")
     ultimo_acceso: Optional[datetime] = None
 
     @field_validator("rol", mode="before")
     @classmethod
     def extract_rol_name(cls, v):
-        if hasattr(v, "nombre"):
-            return v.nombre
-        return str(v)
+        return v.nombre if hasattr(v, "nombre") else str(v)
 
     @field_validator("fecha_registro", mode="before")
     @classmethod
-    def extract_fecha_registro(cls, v):
-        if v is None:
-            return v
-        if hasattr(v, "isoformat"):
-            return v
+    def handle_fecha_creacion(cls, v):
         return v
 
 
 class UserCreateRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1, max_length=150)
+    nombre_completo: str
     email: EmailStr
     password: str = Field(..., min_length=6)
     rol: str
 
-    @field_validator("rol")
-    @classmethod
-    def validate_rol(cls, v):
-        if v not in ROLES_VALIDOS:
-            raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(ROLES_VALIDOS)}")
-        return v
-
 
 class UserUpdateRequest(BaseModel):
-    nombre_completo: Optional[str] = Field(None, min_length=1, max_length=150)
+    nombre_completo: Optional[str] = None
     email: Optional[EmailStr] = None
     rol: Optional[str] = None
 
-    @field_validator("rol")
-    @classmethod
-    def validate_rol(cls, v):
-        if v is not None and v not in ROLES_VALIDOS:
-            raise ValueError(f"Rol inválido. Debe ser uno de: {', '.join(ROLES_VALIDOS)}")
-        return v
-
 
 # ─── Esquemas de Autenticación ──────────────────────────────────────────
+
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
     remember: bool = False
 
@@ -78,14 +56,15 @@ class LoginResponse(BaseModel):
     usuario: UserOut
 
 
-# ─── Esquemas de Setup ─────────────────────────────────────────────────
+# ─── Esquemas de Setup ──────────────────────────────────────────────────
+
 class SetupRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1, max_length=150)
+    nombre_completo: str
     email: EmailStr
     password: str = Field(..., min_length=6)
-    negocio_nombre: str = Field(..., min_length=1)
-    negocio_direccion: str = Field(..., min_length=1)
-    negocio_rfc: str = Field(..., min_length=1)
+    negocio_nombre: str
+    negocio_direccion: str
+    negocio_rfc: str
     negocio_telefono: Optional[str] = None
 
 
@@ -100,20 +79,18 @@ class SetupStatusResponse(BaseModel):
 
 
 # ─── Esquemas de Preferencias ──────────────────────────────────────────
+
 class PreferenciasOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     idioma: str = "es"
     tema_visual: str = "light"
-    zona_horaria: str = "America/Mexico_City"
+    zona_horaria: str = Field(default="America/Mexico_City", alias="configuracion_regional")
 
     @field_validator("zona_horaria", mode="before")
     @classmethod
-    def map_configuracion_regional(cls, v):
-        # Map from configuracion_regional to zona_horaria for schema compat
-        if v and v == "es-MX":
-            return "America/Mexico_City"
-        return v if v else "America/Mexico_City"
+    def handle_configuracion_regional(cls, v):
+        return v
 
 
 class PreferenciasUpdateRequest(BaseModel):
@@ -123,8 +100,9 @@ class PreferenciasUpdateRequest(BaseModel):
 
 
 # ─── Esquemas de Recuperación ──────────────────────────────────────────
+
 class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+    email: str
 
 
 class ForgotPasswordResponse(BaseModel):
@@ -138,8 +116,8 @@ class VerifyTokenResponse(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=6)
-    confirm_password: str = Field(..., min_length=6)
+    new_password: str
+    confirm_password: str
 
 
 class ResetPasswordResponse(BaseModel):
@@ -148,15 +126,20 @@ class ResetPasswordResponse(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=6)
-    confirm_password: str = Field(..., min_length=6)
+    new_password: str
+    confirm_password: str
 
 
 class ChangePasswordResponse(BaseModel):
     mensaje: str
 
 
+class LogoutResponse(BaseModel):
+    mensaje: str
+
+
 # ─── Esquemas de Respuesta Genéricos ───────────────────────────────────
+
 class PaginatedUsersResponse(BaseModel):
     items: List[UserOut]
     total: int
@@ -173,7 +156,3 @@ class UserActionResponse(BaseModel):
 class PerfilResponse(BaseModel):
     usuario: UserOut
     preferencias: PreferenciasOut
-
-
-class LogoutResponse(BaseModel):
-    mensaje: str

@@ -1,18 +1,29 @@
-import { useState } from 'react';
-import { runSetup } from '../../services/api';
-import { Loader2, Check, ArrowLeft, ArrowRight, Store } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, Check, ChevronRight, ChevronLeft, User } from 'lucide-react';
+import * as api from '../../services/api';
+
+interface FormData {
+  nombre_completo: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  negocio_nombre: string;
+  negocio_direccion: string;
+  negocio_rfc: string;
+  negocio_telefono: string;
+}
 
 interface SetupWizardFormProps {
   onComplete: () => void;
 }
 
-export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
+export function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     nombre_completo: '',
     email: '',
     password: '',
@@ -23,37 +34,57 @@ export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
     negocio_telefono: '',
   });
 
-  const updateField = (field: string, value: string) => {
+  const updateField = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const validateStep1 = () => {
-    if (!formData.nombre_completo.trim()) return 'El nombre completo es obligatorio.';
-    if (!formData.email.trim()) return 'El correo electrónico es obligatorio.';
-    if (!formData.password.trim()) return 'La contraseña es obligatoria.';
-    if (formData.password.length < 6) return 'La contraseña debe tener al menos 6 caracteres.';
-    if (formData.password !== formData.confirm_password) return 'Las contraseñas no coinciden.';
-    return null;
+  const validateStep1 = (): boolean => {
+    if (!formData.nombre_completo.trim()) {
+      setError('El nombre completo es obligatorio');
+      return false;
+    }
+    if (!formData.email.trim()) {
+      setError('El correo electrónico es obligatorio');
+      return false;
+    }
+    if (!formData.password) {
+      setError('La contraseña es obligatoria');
+      return false;
+    }
+    if (formData.password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return false;
+    }
+    if (formData.password !== formData.confirm_password) {
+      setError('Las contraseñas no coinciden');
+      return false;
+    }
+    return true;
   };
 
-  const validateStep2 = () => {
-    if (!formData.negocio_nombre.trim()) return 'El nombre del negocio es obligatorio.';
-    if (!formData.negocio_direccion.trim()) return 'La dirección es obligatoria.';
-    if (!formData.negocio_rfc.trim()) return 'El RFC es obligatorio.';
-    return null;
+  const validateStep2 = (): boolean => {
+    if (!formData.negocio_nombre.trim()) {
+      setError('El nombre del negocio es obligatorio');
+      return false;
+    }
+    if (!formData.negocio_direccion.trim()) {
+      setError('La dirección es obligatoria');
+      return false;
+    }
+    if (!formData.negocio_rfc.trim()) {
+      setError('El RFC es obligatorio');
+      return false;
+    }
+    return true;
   };
 
   const handleNext = () => {
     setError('');
-    if (step === 1) {
-      const err = validateStep1();
-      if (err) { setError(err); return; }
+    if (step === 1 && validateStep1()) {
+      setStep(2);
+    } else if (step === 2 && validateStep2()) {
+      setStep(3);
     }
-    if (step === 2) {
-      const err = validateStep2();
-      if (err) { setError(err); return; }
-    }
-    setStep((prev) => prev + 1);
   };
 
   const handlePrev = () => {
@@ -61,29 +92,40 @@ export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
     setStep((prev) => prev - 1);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
     setError('');
     setIsLoading(true);
     try {
-      await runSetup({
-        nombre_completo: formData.nombre_completo.trim(),
-        email: formData.email.trim(),
+      await api.runSetup({
+        nombre_completo: formData.nombre_completo,
+        email: formData.email,
         password: formData.password,
-        negocio_nombre: formData.negocio_nombre.trim(),
-        negocio_direccion: formData.negocio_direccion.trim(),
-        negocio_rfc: formData.negocio_rfc.trim(),
-        negocio_telefono: formData.negocio_telefono.trim() || null,
+        negocio_nombre: formData.negocio_nombre,
+        negocio_direccion: formData.negocio_direccion,
+        negocio_rfc: formData.negocio_rfc,
+        negocio_telefono: formData.negocio_telefono || null,
       });
       onComplete();
-    } catch (err: any) {
-      setError(err.message || 'Error al guardar la configuración inicial.');
+      navigate('/login', { replace: true });
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        const apiErr = err as { status: number; message: string };
+        if (apiErr.status === 409) {
+          setError('La configuración inicial ya fue completada');
+        } else {
+          setError(apiErr.message || 'Error al guardar la configuración');
+        }
+      } else {
+        setError('Error al conectar con el servidor');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto">
+    <div className="w-full max-w-lg mx-auto">
       {/* Steps indicator */}
       <div className="flex items-center justify-center gap-2 mb-8">
         {[1, 2, 3].map((s) => (
@@ -91,17 +133,17 @@ export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                 s === step
-                  ? 'bg-slate-900 text-white'
+                  ? 'bg-blue-600 text-white'
                   : s < step
                   ? 'bg-green-500 text-white'
                   : 'bg-slate-200 text-slate-500'
               }`}
             >
-              {s < step ? <Check className="h-4 w-4" /> : s}
+              {s < step ? <Check className="w-4 h-4" /> : s}
             </div>
             {s < 3 && (
               <div
-                className={`w-16 h-0.5 ${
+                className={`w-8 h-0.5 ${
                   s < step ? 'bg-green-500' : 'bg-slate-200'
                 }`}
               />
@@ -110,178 +152,221 @@ export default function SetupWizardForm({ onComplete }: SetupWizardFormProps) {
         ))}
       </div>
 
-      {error && (
-        <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-200 mb-5">
-          {error}
-        </div>
-      )}
-
-      {step === 1 && (
-        <div className="space-y-5">
-          <div className="text-center mb-6">
-            <Store className="h-10 w-10 mx-auto mb-2 text-slate-900" />
-            <h2 className="text-xl font-bold text-slate-900">Cuenta de administrador</h2>
-            <p className="text-sm text-slate-500 mt-1">Crea la cuenta principal del sistema.</p>
+      <form onSubmit={handleSubmit}>
+        {error && (
+          <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+            {error}
           </div>
+        )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre completo</label>
-            <input
-              type="text"
-              value={formData.nombre_completo}
-              onChange={(e) => updateField('nombre_completo', e.target.value)}
-              placeholder="Juan Pérez"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            />
-          </div>
+        {step === 1 && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Cuenta de Administrador</h2>
+                <p className="text-sm text-slate-500">Cree la cuenta principal del sistema</p>
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Correo electrónico</label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => updateField('email', e.target.value)}
-              placeholder="admin@ferreteria.com"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre completo</label>
+              <input
+                type="text"
+                value={formData.nombre_completo}
+                onChange={(e) => updateField('nombre_completo', e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+                placeholder="Nombre del administrador"
+                disabled={isLoading}
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Contraseña</label>
-            <input
-              type="password"
-              value={formData.password}
-              onChange={(e) => updateField('password', e.target.value)}
-              placeholder="Mínimo 6 caracteres"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Correo electrónico</label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => updateField('email', e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+                placeholder="admin@ejemplo.com"
+                disabled={isLoading}
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirmar contraseña</label>
-            <input
-              type="password"
-              value={formData.confirm_password}
-              onChange={(e) => updateField('confirm_password', e.target.value)}
-              placeholder="Repite la contraseña"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            />
-          </div>
-        </div>
-      )}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Contraseña</label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => updateField('password', e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+                placeholder="Mínimo 6 caracteres"
+                disabled={isLoading}
+              />
+            </div>
 
-      {step === 2 && (
-        <div className="space-y-5">
-          <div className="text-center mb-6">
-            <Store className="h-10 w-10 mx-auto mb-2 text-slate-900" />
-            <h2 className="text-xl font-bold text-slate-900">Datos del negocio</h2>
-            <p className="text-sm text-slate-500 mt-1">Configura la información de tu ferretería.</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre del negocio</label>
-            <input
-              type="text"
-              value={formData.negocio_nombre}
-              onChange={(e) => updateField('negocio_nombre', e.target.value)}
-              placeholder="Ferretería El Martillo"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Dirección</label>
-            <input
-              type="text"
-              value={formData.negocio_direccion}
-              onChange={(e) => updateField('negocio_direccion', e.target.value)}
-              placeholder="Calle 123, Col. Centro"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">RFC</label>
-            <input
-              type="text"
-              value={formData.negocio_rfc}
-              onChange={(e) => updateField('negocio_rfc', e.target.value)}
-              placeholder="XAXX010101000"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Teléfono (opcional)</label>
-            <input
-              type="text"
-              value={formData.negocio_telefono}
-              onChange={(e) => updateField('negocio_telefono', e.target.value)}
-              placeholder="555-123-4567"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent"
-            />
-          </div>
-        </div>
-      )}
-
-      {step === 3 && (
-        <div className="space-y-5">
-          <div className="text-center mb-6">
-            <Check className="h-10 w-10 mx-auto mb-2 text-green-500" />
-            <h2 className="text-xl font-bold text-slate-900">Resumen</h2>
-            <p className="text-sm text-slate-500 mt-1">Revisa la información antes de guardar.</p>
-          </div>
-
-          <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-            <h3 className="font-medium text-slate-900">Administrador</h3>
-            <div className="text-sm text-slate-600 space-y-1">
-              <p><span className="font-medium">Nombre:</span> {formData.nombre_completo}</p>
-              <p><span className="font-medium">Email:</span> {formData.email}</p>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirmar contraseña</label>
+              <input
+                type="password"
+                value={formData.confirm_password}
+                onChange={(e) => updateField('confirm_password', e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+                placeholder="Repita la contraseña"
+                disabled={isLoading}
+              />
             </div>
           </div>
+        )}
 
-          <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-            <h3 className="font-medium text-slate-900">Negocio</h3>
-            <div className="text-sm text-slate-600 space-y-1">
-              <p><span className="font-medium">Nombre:</span> {formData.negocio_nombre}</p>
-              <p><span className="font-medium">Dirección:</span> {formData.negocio_direccion}</p>
-              <p><span className="font-medium">RFC:</span> {formData.negocio_rfc}</p>
-              {formData.negocio_telefono && (
-                <p><span className="font-medium">Teléfono:</span> {formData.negocio_telefono}</p>
+        {step === 2 && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-xl bg-green-100 text-green-600">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Datos del Negocio</h2>
+                <p className="text-sm text-slate-500">Configure los datos de su establecimiento</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre del negocio</label>
+              <input
+                type="text"
+                value={formData.negocio_nombre}
+                onChange={(e) => updateField('negocio_nombre', e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+                placeholder="Ferretería"
+                disabled={isLoading}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Dirección</label>
+              <input
+                type="text"
+                value={formData.negocio_direccion}
+                onChange={(e) => updateField('negocio_direccion', e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+                placeholder="Calle, número, colonia, ciudad"
+                disabled={isLoading}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">RFC</label>
+              <input
+                type="text"
+                value={formData.negocio_rfc}
+                onChange={(e) => updateField('negocio_rfc', e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+                placeholder="RFC del negocio"
+                disabled={isLoading}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Teléfono (opcional)</label>
+              <input
+                type="text"
+                value={formData.negocio_telefono}
+                onChange={(e) => updateField('negocio_telefono', e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+                placeholder="Teléfono del negocio"
+                disabled={isLoading}
+              />
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-xl bg-purple-100 text-purple-600">
+                <Check className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Resumen</h2>
+                <p className="text-sm text-slate-500">Verifique los datos antes de finalizar</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+              <h3 className="font-medium text-slate-900">Cuenta de Administrador</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="text-slate-500">Nombre:</span>
+                <span className="text-slate-900 font-medium">{formData.nombre_completo}</span>
+                <span className="text-slate-500">Email:</span>
+                <span className="text-slate-900 font-medium">{formData.email}</span>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+              <h3 className="font-medium text-slate-900">Datos del Negocio</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="text-slate-500">Nombre:</span>
+                <span className="text-slate-900 font-medium">{formData.negocio_nombre}</span>
+                <span className="text-slate-500">Dirección:</span>
+                <span className="text-slate-900 font-medium">{formData.negocio_direccion}</span>
+                <span className="text-slate-500">RFC:</span>
+                <span className="text-slate-900 font-medium">{formData.negocio_rfc}</span>
+                {formData.negocio_telefono && (
+                  <>
+                    <span className="text-slate-500">Teléfono:</span>
+                    <span className="text-slate-900 font-medium">{formData.negocio_telefono}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between mt-8">
+          {step > 1 ? (
+            <button
+              type="button"
+              onClick={handlePrev}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 transition-all disabled:opacity-50"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Anterior
+            </button>
+          ) : (
+            <div />
+          )}
+
+          {step < 3 ? (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all"
+            >
+              Siguiente
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Finalizar
+                </>
               )}
-            </div>
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading}
-            className="w-full py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-          >
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isLoading ? 'Guardando...' : 'Guardar configuración'}
-          </button>
+            </button>
+          )}
         </div>
-      )}
-
-      {/* Navigation buttons */}
-      <div className="flex justify-between mt-6">
-        {step > 1 && step < 3 && (
-          <button
-            onClick={handlePrev}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-all"
-          >
-            <ArrowLeft className="h-4 w-4" /> Anterior
-          </button>
-        )}
-        {step < 3 && (
-          <button
-            onClick={handleNext}
-            className="flex items-center gap-2 px-6 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-all ml-auto"
-          >
-            Siguiente <ArrowRight className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      </form>
     </div>
   );
 }

@@ -1,37 +1,37 @@
-import { useState } from 'react';
-import { changePassword } from '../../services/api';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Lock, Eye, EyeOff } from 'lucide-react';
+import * as api from '../../services/api';
 
-export default function ChangePasswordForm() {
+export function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPasswords, setShowPasswords] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [showPasswords, setShowPasswords] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess(false);
 
-    if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
-      setError('Todos los campos son obligatorios.');
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError('Todos los campos son obligatorios');
       return;
     }
     if (newPassword.length < 6) {
-      setError('La nueva contraseña debe tener al menos 6 caracteres.');
+      setError('La nueva contraseña debe tener al menos 6 caracteres');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('Las contraseñas nuevas no coinciden.');
+      setError('Las contraseñas no coinciden');
       return;
     }
 
     setIsLoading(true);
     try {
-      await changePassword({
+      await api.changePassword({
         current_password: currentPassword,
         new_password: newPassword,
         confirm_password: confirmPassword,
@@ -40,8 +40,18 @@ export default function ChangePasswordForm() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar la contraseña.');
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        const apiErr = err as { status: number; message: string };
+        if (apiErr.status === 400) {
+          setError(apiErr.message === 'PASSWORDS_DONT_MATCH' ? 'Las contraseñas no coinciden' : 'Contraseña actual incorrecta');
+        } else {
+          setError(apiErr.message || 'Error al cambiar la contraseña');
+        }
+      } else {
+        setError('Error al conectar con el servidor');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -49,69 +59,79 @@ export default function ChangePasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <h3 className="text-lg font-semibold text-slate-900">Cambiar contraseña</h3>
+      <h3 className="text-base font-semibold text-slate-900">Cambiar contraseña</h3>
 
       {error && (
-        <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-200">
-          {error}
-        </div>
+        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       )}
       {success && (
-        <div className="bg-green-50 text-green-600 text-sm px-4 py-3 rounded-xl border border-green-200">
-          Contraseña actualizada exitosamente.
+        <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">
+          Contraseña actualizada exitosamente
         </div>
       )}
 
-      <div>
+      <div className="relative">
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Contraseña actual</label>
-        <input
-          type={showPasswords ? 'text' : 'password'}
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-          autoComplete="current-password"
-        />
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type={showPasswords ? 'text' : 'password'}
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+            autoComplete="current-password"
+            disabled={isLoading}
+          />
+        </div>
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Nueva contraseña</label>
         <div className="relative">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type={showPasswords ? 'text' : 'password'}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all pr-10"
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
             autoComplete="new-password"
+            disabled={isLoading}
           />
           <button
             type="button"
             onClick={() => setShowPasswords(!showPasswords)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            tabIndex={-1}
           >
-            {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1.5">Confirmar nueva contraseña</label>
-        <input
-          type={showPasswords ? 'text' : 'password'}
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-          autoComplete="new-password"
-        />
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type={showPasswords ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+            autoComplete="new-password"
+            disabled={isLoading}
+          />
+        </div>
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-        {isLoading ? 'Cambiando...' : 'Cambiar contraseña'}
+        {isLoading ? (
+          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        ) : (
+          'Cambiar contraseña'
+        )}
       </button>
     </form>
   );

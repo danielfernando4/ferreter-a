@@ -1,82 +1,95 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import ResetPasswordForm from '../components/auth/ResetPasswordForm';
-import { verifyResetToken } from '../services/api';
-import { Store, Loader2, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { ResetPasswordForm } from '../components/auth/ResetPasswordForm';
+import { Lock, AlertCircle } from 'lucide-react';
+import * as api from '../services/api';
 
-export default function ResetPasswordPage() {
+export function ResetPasswordPage() {
   const { token } = useParams<{ token: string }>();
-  const navigate = useNavigate();
-  const [tokenValido, setTokenValido] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [verifying, setVerifying] = useState(true);
+  const [valid, setValid] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!token) {
-      setError('Token no proporcionado.');
-      setLoading(false);
+      setError('Token no proporcionado');
+      setVerifying(false);
       return;
     }
-    verifyResetToken(token)
-      .then((res) => {
-        if (res.valido) {
-          setTokenValido(true);
+
+    async function verify() {
+      try {
+        const result = await api.verifyResetToken(token);
+        if (result.valido) {
+          setValid(true);
         } else {
-          setError('El token no es válido.');
+          setError('El enlace no es válido');
         }
-        setLoading(false);
-      })
-      .catch((err: any) => {
-        setError(err.message || 'El token es inválido o ha expirado.');
-        setLoading(false);
-      });
+      } catch (err: unknown) {
+        if (err && typeof err === 'object' && 'status' in err) {
+          const apiErr = err as { status: number };
+          if (apiErr.status === 410) {
+            setError('El enlace ha expirado');
+          } else if (apiErr.status === 404) {
+            setError('El enlace no es válido');
+          } else {
+            setError('Error al verificar el enlace');
+          }
+        } else {
+          setError('Error al conectar con el servidor');
+        }
+      } finally {
+        setVerifying(false);
+      }
+    }
+    verify();
   }, [token]);
 
-  const handleSuccess = () => {
-    navigate('/login', { replace: true });
-  };
-
-  if (loading) {
+  if (verifying) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-900" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+          <p className="text-slate-500 text-sm">Verificando enlace...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="h-8 w-8 text-red-600" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:p-8 text-center">
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-slate-900 mb-2">Enlace inválido</h2>
+            <p className="text-sm text-slate-500 mb-6">{error}</p>
+            <a
+              href="/forgot-password"
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Solicitar nuevo enlace
+            </a>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Token inválido</h1>
-          <p className="text-sm text-slate-600 mb-6">{error}</p>
-          <a
-            href="/login"
-            className="inline-block px-6 py-2.5 rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800 transition-all"
-          >
-            Volver al inicio de sesión
-          </a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Store className="h-8 w-8 text-white" />
+          <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Restablecer contraseña</h1>
-          <p className="text-sm text-slate-500 mt-1">Ingresa tu nueva contraseña</p>
+          <p className="text-slate-500 mt-1">Ingrese su nueva contraseña</p>
         </div>
-
-        <div className="bg-white rounded-2xl shadow-sm p-8">
-          {token && <ResetPasswordForm token={token} onSuccess={handleSuccess} />}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 lg:p-8">
+          {valid && token && <ResetPasswordForm token={token} />}
         </div>
       </div>
     </div>

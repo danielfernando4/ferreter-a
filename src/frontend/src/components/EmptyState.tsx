@@ -9,33 +9,32 @@ interface EmptyStateProps {
   onAction?: () => void;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({
+export default function EmptyState({
   icon,
   title,
   description,
   actionLabel,
   onAction,
-}) => {
+}: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-4">
+    <div className="flex flex-col items-center justify-center py-12 px-4">
       <div className="text-slate-400 mb-4">
-        {icon || <Inbox size={64} />}
+        {icon || <Inbox size={48} />}
       </div>
-      <h3 className="text-xl font-semibold text-slate-700 mb-2">{title}</h3>
+      <h3 className="text-lg font-medium text-slate-900 mb-1">{title}</h3>
       {description && (
-        <p className="text-slate-500 text-center max-w-md mb-6">{description}</p>
+        <p className="text-sm text-slate-500 mb-4 text-center max-w-sm">
+          {description}
+        </p>
       )}
       {actionLabel && onAction && (
         <button
-          type="button"
           onClick={onAction}
-          className="px-6 py-2.5 bg-blue-600 text-white rounded-2xl shadow-sm hover:bg-blue-700 transition-all"
+          className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-sm font-medium"
         >
           {actionLabel}
         </button>
       )}
     </div>
   );
-};
-
-export default EmptyState;
+}

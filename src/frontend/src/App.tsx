@@ -1,101 +1,91 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { SessionProvider } from './contexts/SessionContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import RoleGuard from './components/RoleGuard';
-import LayoutWithNav from './components/LayoutWithNav';
+import { AuthProvider, useAuthContext } from './context/AuthContext';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import AppLayout from './components/layout/AppLayout';
+import LoadingState from './components/LoadingState';
+import HomePage from './pages/HomePage';
 import SetupWizardPage from './pages/SetupWizardPage';
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import UserListPage from './pages/UserListPage';
+import CreateUserPage from './pages/CreateUserPage';
+import EditUserPage from './pages/EditUserPage';
 import ProfilePage from './pages/ProfilePage';
-import UserListPage from './pages/admin/UserListPage';
-import UserFormPage from './pages/admin/UserFormPage';
 
-const AppRoutes: React.FC = () => {
-  const { isLoading, setupRequired } = useAuth();
+function AppContent() {
+  const { isAuthenticated, isLoading, setupRequired, checkingSetup } = useAuthContext();
 
-  if (isLoading) {
+  if (checkingSetup || isLoading) {
+    return <LoadingState message="Cargando..." />;
+  }
+
+  // If setup is required, redirect to setup wizard
+  if (setupRequired) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-slate-600">Inicializando...</p>
-        </div>
-      </div>
+      <Routes>
+        <Route path="/setup-wizard" element={<SetupWizardPage />} />
+        <Route path="*" element={<Navigate to="/setup-wizard" replace />} />
+      </Routes>
     );
   }
 
+  // If not authenticated, show public routes
+  if (!isAuthenticated) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  // Authenticated routes with layout
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route
-        path="/setup"
-        element={
-          setupRequired ? (
-            <SetupWizardPage />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route path="/login" element={<LoginPage />} />
-
-      {/* Protected routes with layout */}
-      <Route
-        element={
-          <ProtectedRoute>
-            <SessionProvider>
-              <LayoutWithNav />
-            </SessionProvider>
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-
-        {/* Admin routes */}
+    <AppLayout>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
         <Route
-          path="/admin/users"
+          path="/usuarios"
           element={
-            <RoleGuard allowedRoles={['administrador']}>
+            <ProtectedRoute requiredRole="administrador">
               <UserListPage />
-            </RoleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
-          path="/admin/users/new"
+          path="/usuarios/nuevo"
           element={
-            <RoleGuard allowedRoles={['administrador']}>
-              <UserFormPage />
-            </RoleGuard>
+            <ProtectedRoute requiredRole="administrador">
+              <CreateUserPage />
+            </ProtectedRoute>
           }
         />
         <Route
-          path="/admin/users/:id/edit"
+          path="/usuarios/:id/editar"
           element={
-            <RoleGuard allowedRoles={['administrador']}>
-              <UserFormPage />
-            </RoleGuard>
+            <ProtectedRoute requiredRole="administrador">
+              <EditUserPage />
+            </ProtectedRoute>
           }
         />
-      </Route>
-
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to={setupRequired ? '/setup' : '/dashboard'} replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+        <Route path="/perfil" element={<ProfilePage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppLayout>
   );
-};
+}
 
-const App: React.FC = () => {
+function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <AppContent />
       </AuthProvider>
     </BrowserRouter>
   );
-};
+}
 
 export default App;

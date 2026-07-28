@@ -1,102 +1,122 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { perfilApi } from '../services/api';
-import type { PreferenciasOut } from '../types/auth';
-import AppLayout from '../components/layout/AppLayout';
+import { useNavigate } from 'react-router-dom';
+import { UserCircle, Loader2 } from 'lucide-react';
 import ProfileForm from '../components/profile/ProfileForm';
 import ChangePasswordForm from '../components/profile/ChangePasswordForm';
 import PreferencesForm from '../components/profile/PreferencesForm';
-import { UserCircle, Loader2, AlertCircle } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import * as api from '../services/api';
+import type { UserOut, PreferenciasOut } from '../types/auth';
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuth();
+  const navigate = useNavigate();
+  const { user: authUser, token, updateUser } = useAuth();
+  const [usuario, setUsuario] = useState<UserOut | null>(null);
   const [preferencias, setPreferencias] = useState<PreferenciasOut | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'preferences'>('profile');
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
+    if (!token) return;
+    (async () => {
       try {
-        const data = await perfilApi.get();
-        if (!cancelled) {
-          setPreferencias(data.preferencias);
-          updateUser(data.usuario);
-        }
+        const res = await api.getPerfil(token);
+        setUsuario(res.usuario);
+        setPreferencias(res.preferencias);
       } catch (err: unknown) {
-        if (!cancelled) {
-          const msg = err instanceof Error ? err.message : 'Error al cargar perfil';
-          setError(msg);
-        }
+        const msg = err instanceof Error ? err.message : 'Error al cargar perfil';
+        setError(msg);
       } finally {
-        if (!cancelled) setIsLoading(false);
+        setLoading(false);
       }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [updateUser]);
+    })();
+  }, [token]);
 
-  async function handleProfileSave(data: { nombre_completo?: string; email?: string }) {
-    const updated = await perfilApi.update(data);
+  const handleProfileSave = (updated: UserOut) => {
+    setUsuario(updated);
     updateUser(updated);
-  }
+  };
 
-  async function handlePreferencesSave(data: Partial<PreferenciasOut>) {
-    const updated = await perfilApi.updatePreferencias(data);
+  const handlePreferencesSave = (updated: PreferenciasOut) => {
     setPreferencias(updated);
-  }
+  };
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <AppLayout>
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={28} className="animate-spin text-blue-600" />
+          <p className="text-sm text-slate-500">Cargando perfil...</p>
         </div>
-      </AppLayout>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <AppLayout>
-        <div className="flex flex-col items-center gap-3 py-12">
-          <AlertCircle className="h-8 w-8 text-red-500" />
-          <p className="text-sm text-slate-600">{error}</p>
+      <div className="flex flex-col items-center justify-center py-16">
+        <div className="p-3 text-sm text-red-600 bg-red-50 rounded-xl border border-red-200 mb-4">
+          {error}
         </div>
-      </AppLayout>
+        <button
+          onClick={() => navigate('/')}
+          className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-xl hover:bg-blue-100 transition-all"
+        >
+          Volver al inicio
+        </button>
+      </div>
     );
   }
 
+  const tabs = [
+    { id: 'profile' as const, label: 'Datos personales' },
+    { id: 'password' as const, label: 'Cambiar contraseña' },
+    { id: 'preferences' as const, label: 'Preferencias' },
+  ];
+
   return (
-    <AppLayout>
-      <div className="max-w-2xl space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
-            <UserCircle className="h-5 w-5 text-indigo-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Mi Perfil</h1>
-            <p className="text-sm text-slate-500">Administra tu información personal</p>
-          </div>
+    <div>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+          <UserCircle className="text-blue-600" size={24} />
         </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Mi Perfil</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {usuario?.email || ''}
+          </p>
+        </div>
+      </div>
 
-        {user && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <ProfileForm user={user} onSave={handleProfileSave} />
-          </div>
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-slate-100 p-1 rounded-xl w-fit">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+              activeTab === tab.id
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        {activeTab === 'profile' && usuario && (
+          <ProfileForm user={usuario} onSave={handleProfileSave} />
         )}
-
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        {activeTab === 'password' && (
           <ChangePasswordForm />
-        </div>
-
-        {preferencias && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <PreferencesForm preferencias={preferencias} onSave={handlePreferencesSave} />
-          </div>
+        )}
+        {activeTab === 'preferences' && preferencias && (
+          <PreferencesForm preferencias={preferencias} onSave={handlePreferencesSave} />
         )}
       </div>
-    </AppLayout>
+    </div>
   );
 }

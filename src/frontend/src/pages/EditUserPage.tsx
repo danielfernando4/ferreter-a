@@ -1,104 +1,79 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { usuariosApi } from '../services/api';
-import type { UserOut, UserCreateRequest, UserUpdateRequest } from '../types/auth';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import UserForm from '../components/users/UserForm';
-import AppLayout from '../components/layout/AppLayout';
-import { Pencil, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import * as api from '../services/api';
+import type { UserOut } from '../types/auth';
 
 export default function EditUserPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { token } = useAuth();
   const [user, setUser] = useState<UserOut | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!id) {
-      setError('ID de usuario no proporcionado');
-      setIsLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    async function load() {
+    if (!id || !token) return;
+    (async () => {
       try {
-        const data = await usuariosApi.get(Number(id));
-        if (!cancelled) setUser(data);
+        const data = await api.getUsuario(token, parseInt(id));
+        setUser(data);
       } catch (err: unknown) {
-        if (!cancelled) {
-          const msg = err instanceof Error ? err.message : 'Error al cargar usuario';
-          setError(msg);
-        }
+        const msg = err instanceof Error ? err.message : 'Error al cargar usuario';
+        setError(msg);
       } finally {
-        if (!cancelled) setIsLoading(false);
+        setLoading(false);
       }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [id]);
+    })();
+  }, [id, token]);
 
-  async function handleSave(data: UserCreateRequest | UserUpdateRequest) {
-    await usuariosApi.update(Number(id!), data as UserUpdateRequest);
-    navigate('/usuarios');
-  }
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <AppLayout>
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={28} className="animate-spin text-blue-600" />
+          <p className="text-sm text-slate-500">Cargando datos del usuario...</p>
         </div>
-      </AppLayout>
+      </div>
     );
   }
 
   if (error || !user) {
     return (
-      <AppLayout>
-        <div className="flex flex-col items-center gap-3 py-12">
-          <AlertCircle className="h-8 w-8 text-red-500" />
-          <p className="text-sm text-slate-600">{error || 'Usuario no encontrado'}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/usuarios')}
-            className="rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-all"
-          >
-            Volver a usuarios
-          </button>
+      <div className="flex flex-col items-center justify-center py-16">
+        <div className="p-3 text-sm text-red-600 bg-red-50 rounded-xl border border-red-200 mb-4">
+          {error || 'Usuario no encontrado'}
         </div>
-      </AppLayout>
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-xl hover:bg-blue-100 transition-all"
+        >
+          Volver a usuarios
+        </button>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-2xl">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            type="button"
-            onClick={() => navigate('/usuarios')}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
-              <Pencil className="h-5 w-5 text-indigo-600" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900">Editar usuario</h1>
-              <p className="text-sm text-slate-500">{user.nombre_completo}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Form */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-          <UserForm initialData={user} mode="edit" onSave={handleSave} />
+    <div>
+      <div className="flex items-center gap-4 mb-6">
+        <button
+          onClick={() => navigate('/usuarios')}
+          className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Editar usuario</h1>
+          <p className="text-sm text-slate-500 mt-1">{user.nombre_completo}</p>
         </div>
       </div>
-    </AppLayout>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <UserForm mode="edit" initialData={user} onSave={() => navigate('/usuarios')} />
+      </div>
+    </div>
   );
 }

@@ -1,90 +1,87 @@
-import { useState, useEffect } from 'react';
+import { useState, type FormEvent } from 'react';
+import { Save, Loader2 } from 'lucide-react';
 import type { UserOut } from '../../types/auth';
-import { Loader2, Save } from 'lucide-react';
+import * as api from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 interface ProfileFormProps {
   user: UserOut;
-  onSave: (data: { nombre_completo?: string; email?: string }) => Promise<void>;
+  onSave: (user: UserOut) => void;
 }
 
 export default function ProfileForm({ user, onSave }: ProfileFormProps) {
-  const [nombreCompleto, setNombreCompleto] = useState('');
-  const [email, setEmail] = useState('');
+  const { token } = useAuth();
+  const [nombre, setNombre] = useState(user.nombre_completo);
+  const [email, setEmail] = useState(user.email);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    setNombreCompleto(user.nombre_completo);
-    setEmail(user.email);
-  }, [user]);
-
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!nombreCompleto.trim() || !email.trim()) {
-      setError('Todos los campos son obligatorios');
-      return;
-    }
-    setIsLoading(true);
     setError('');
-    setSuccess(false);
+    setIsLoading(true);
     try {
-      const data: { nombre_completo?: string; email?: string } = {};
-      if (nombreCompleto.trim() !== user.nombre_completo) data.nombre_completo = nombreCompleto.trim();
-      if (email.trim() !== user.email) data.email = email.trim();
-      if (Object.keys(data).length > 0) {
-        await onSave(data);
-      }
-      setSuccess(true);
+      const updated = await api.updatePerfil(token!, {
+        nombre_completo: nombre.trim() || undefined,
+        email: email.trim() || undefined,
+      });
+      onSave(updated);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al guardar';
+      const msg = err instanceof Error ? err.message : 'Error al actualizar perfil';
       setError(msg);
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
+      <h3 className="text-lg font-semibold text-slate-900">Datos personales</h3>
+
       {error && (
-        <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="p-3 text-sm text-red-600 bg-red-50 rounded-xl border border-red-200">
           {error}
-        </div>
-      )}
-      {success && (
-        <div className="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-          Perfil actualizado exitosamente
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Nombre completo</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre completo</label>
         <input
           type="text"
-          value={nombreCompleto}
-          onChange={(e) => setNombreCompleto(e.target.value)}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-          disabled={isLoading}
+          value={nombre}
+          onChange={e => setNombre(e.target.value)}
+          required
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-900"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Correo electrónico</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Correo electrónico</label>
         <input
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-          disabled={isLoading}
+          onChange={e => setEmail(e.target.value)}
+          required
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-900"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Rol</label>
+        <input
+          type="text"
+          value={user.rol}
+          disabled
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-500 cursor-not-allowed"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-all"
+        className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
-        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
         {isLoading ? 'Guardando...' : 'Guardar cambios'}
       </button>
     </form>

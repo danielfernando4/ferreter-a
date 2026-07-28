@@ -1,17 +1,15 @@
-import bcrypt
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from jose import jwt
-from jose.exceptions import JWTError
+import bcrypt
+from jose import JWTError, jwt
 
 from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REMEMBER_TOKEN_EXPIRE_DAYS, RESET_TOKEN_EXPIRE_HOURS
 
 
-# ────────────────────────────
-# Password hashing (bcrypt + SHA-256)
-# ────────────────────────────
+# ─── Password Hashing ───
 
 def _normalize_password(pw: str) -> str:
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
@@ -27,56 +25,49 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(normalized, hashed.encode())
 
 
-# ────────────────────────────
-# JWT Token utilities
-# ────────────────────────────
+# ─── Token Generation ───
 
-def create_access_token(usuario_id: int, remember: bool = False) -> tuple[str, int]:
+def generate_random_token(length: int = 48) -> str:
+    """Generate a cryptographically secure random token."""
+    return secrets.token_urlsafe(length)
+
+
+def hash_token(token: str) -> str:
+    """Hash a token for secure storage."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+# ─── JWT Tokens ───
+
+def create_access_token(data: dict, remember: bool = False) -> tuple[str, int]:
     """Create a JWT access token. Returns (token, expires_in_seconds)."""
+    to_encode = data.copy()
     if remember:
-        expire_minutes = REMEMBER_TOKEN_EXPIRE_DAYS * 24 * 60
+        expires_delta = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
     else:
-        expire_minutes = ACCESS_TOKEN_EXPIRE_MINUTES
+        expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    expires_in = int(expire_minutes * 60)
-    expire_dt = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
-
-    payload = {
-        "sub": str(usuario_id),
-        "exp": expire_dt,
-        "iat": datetime.now(timezone.utc),
-        "type": "access",
-        "remember": remember,
-    }
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    expire = datetime.now(timezone.utc) + expires_delta
+    to_encode.update({"exp": expire})
+    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    expires_in = int(expires_delta.total_seconds())
     return token, expires_in
 
 
-def decode_access_token(token: str) -> dict | None:
-    """Decode and validate a JWT token. Returns payload dict or None if invalid."""
+def decode_access_token(token: str) -> Optional[dict]:
+    """Decode and verify a JWT access token. Returns payload or None."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("type") != "access":
-            return None
         return payload
     except JWTError:
         return None
 
 
-# ────────────────────────────
-# Random token generation
-# ────────────────────────────
+# ─── Reset Token ───
 
-def generate_reset_token() -> str:
-    """Generate a cryptographically secure random token for password reset."""
-    return secrets.token_urlsafe(48)
-
-
-def hash_token(token: str) -> str:
-    """Hash a token for storage (SHA-256)."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def get_reset_token_expiry() -> datetime:
-    """Get the expiry datetime for a reset token."""
-    return datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_EXPIRE_HOURS)
+def create_reset_token() -> tuple[str, str, datetime]:
+    """Generate a reset token. Returns (raw_token, hashed_token, expiration)."""
+    raw_token = generate_random_token(32)
+    hashed = hash_token(raw_token)
+    expiration = datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_EXPIRE_HOURS)
+    return raw_token, hashed, expiration

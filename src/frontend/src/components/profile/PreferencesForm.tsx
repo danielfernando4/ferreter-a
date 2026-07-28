@@ -1,66 +1,57 @@
-import { useState, useEffect } from 'react';
+import { useState, type FormEvent } from 'react';
+import { Save, Loader2 } from 'lucide-react';
 import type { PreferenciasOut } from '../../types/auth';
-import { perfilApi } from '../../services/api';
-import { Loader2, Settings, Save } from 'lucide-react';
+import * as api from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 interface PreferencesFormProps {
   preferencias: PreferenciasOut;
-  onSave: (data: Partial<PreferenciasOut>) => Promise<void>;
+  onSave: (prefs: PreferenciasOut) => void;
 }
 
 export default function PreferencesForm({ preferencias, onSave }: PreferencesFormProps) {
-  const [idioma, setIdioma] = useState('es');
-  const [temaVisual, setTemaVisual] = useState('light');
-  const [zonaHoraria, setZonaHoraria] = useState('America/Mexico_City');
+  const { token } = useAuth();
+  const [idioma, setIdioma] = useState(preferencias.idioma);
+  const [tema, setTema] = useState(preferencias.tema_visual);
+  const [zonaHoraria, setZonaHoraria] = useState(preferencias.zona_horaria);
   const [isLoading, setIsLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    setIdioma(preferencias.idioma);
-    setTemaVisual(preferencias.tema_visual);
-    setZonaHoraria(preferencias.zona_horaria);
-  }, [preferencias]);
-
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setError('');
     setIsLoading(true);
-    setSuccess(false);
     try {
-      const data: Partial<PreferenciasOut> = {};
-      if (idioma !== preferencias.idioma) data.idioma = idioma;
-      if (temaVisual !== preferencias.tema_visual) data.tema_visual = temaVisual;
-      if (zonaHoraria !== preferencias.zona_horaria) data.zona_horaria = zonaHoraria;
-      if (Object.keys(data).length > 0) {
-        await onSave(data);
-      }
-      setSuccess(true);
-    } catch {
-      // Error handled by parent
+      const updated = await api.updatePreferencias(token!, {
+        idioma: idioma !== preferencias.idioma ? idioma : undefined,
+        tema_visual: tema !== preferencias.tema_visual ? tema : undefined,
+        zona_horaria: zonaHoraria !== preferencias.zona_horaria ? zonaHoraria : undefined,
+      });
+      onSave(updated);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar preferencias';
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-        <Settings className="h-4 w-4 text-slate-500" />
-        Preferencias
-      </h3>
+    <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
+      <h3 className="text-lg font-semibold text-slate-900">Preferencias</h3>
 
-      {success && (
-        <div className="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-          Preferencias actualizadas
+      {error && (
+        <div className="p-3 text-sm text-red-600 bg-red-50 rounded-xl border border-red-200">
+          {error}
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Idioma</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Idioma</label>
         <select
           value={idioma}
-          onChange={(e) => setIdioma(e.target.value)}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all bg-white"
-          disabled={isLoading}
+          onChange={e => setIdioma(e.target.value)}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-900 bg-white"
         >
           <option value="es">Español</option>
           <option value="en">English</option>
@@ -68,12 +59,11 @@ export default function PreferencesForm({ preferencias, onSave }: PreferencesFor
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Tema visual</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Tema visual</label>
         <select
-          value={temaVisual}
-          onChange={(e) => setTemaVisual(e.target.value)}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all bg-white"
-          disabled={isLoading}
+          value={tema}
+          onChange={e => setTema(e.target.value)}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-900 bg-white"
         >
           <option value="light">Claro</option>
           <option value="dark">Oscuro</option>
@@ -81,32 +71,28 @@ export default function PreferencesForm({ preferencias, onSave }: PreferencesFor
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Zona horaria</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">Zona horaria</label>
         <select
           value={zonaHoraria}
-          onChange={(e) => setZonaHoraria(e.target.value)}
-          className="w-full rounded-2xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all bg-white"
-          disabled={isLoading}
+          onChange={e => setZonaHoraria(e.target.value)}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-slate-900 bg-white"
         >
-          <option value="America/Mexico_City">America/Mexico City (UTC-6)</option>
-          <option value="America/Argentina/Buenos_Aires">America/Argentina/Buenos Aires (UTC-3)</option>
-          <option value="America/Bogota">America/Bogota (UTC-5)</option>
-          <option value="America/Santiago">America/Santiago (UTC-4)</option>
-          <option value="America/Lima">America/Lima (UTC-5)</option>
-          <option value="America/Montevideo">America/Montevideo (UTC-3)</option>
-          <option value="America/Asuncion">America/Asuncion (UTC-4)</option>
-          <option value="America/Panama">America/Panama (UTC-5)</option>
-          <option value="America/Havana">America/Havana (UTC-5)</option>
-          <option value="America/Santo_Domingo">America/Santo Domingo (UTC-4)</option>
+          <option value="America/Mexico_City">Ciudad de México (GMT-6)</option>
+          <option value="America/Monterrey">Monterrey (GMT-6)</option>
+          <option value="America/Tijuana">Tijuana (GMT-8)</option>
+          <option value="America/Argentina/Buenos_Aires">Buenos Aires (GMT-3)</option>
+          <option value="America/Bogota">Bogotá (GMT-5)</option>
+          <option value="America/Santiago">Santiago (GMT-4)</option>
+          <option value="Europe/Madrid">Madrid (GMT+1)</option>
         </select>
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-all"
+        className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
-        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
         {isLoading ? 'Guardando...' : 'Guardar preferencias'}
       </button>
     </form>

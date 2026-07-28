@@ -3,30 +3,18 @@ from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
-# ────────────────────────────
-# Rol schemas
-# ────────────────────────────
-class RolOut(BaseModel):
-    id: int
-    nombre: str
-    descripcion: str
+# ─── Esquemas de Usuario ───
 
+class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-
-# ────────────────────────────
-# Usuario schemas
-# ────────────────────────────
-class UserOut(BaseModel):
     id: int
     nombre_completo: str
     email: str
-    rol: str  # nombre del rol, no objeto
+    rol: str
     activo: bool
     fecha_creacion: datetime
     ultimo_acceso: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
 
     @field_validator("rol", mode="before")
     @classmethod
@@ -37,25 +25,20 @@ class UserOut(BaseModel):
 
 
 class UserCreateRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1, max_length=150)
+    nombre_completo: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    rol: str  # validated against predefined roles
-
-    model_config = ConfigDict(from_attributes=True)
+    rol: str = Field(..., pattern=r"^(administrador|vendedor|almacen)$")
 
 
 class UserUpdateRequest(BaseModel):
-    nombre_completo: Optional[str] = Field(None, min_length=1, max_length=150)
+    nombre_completo: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[EmailStr] = None
-    rol: Optional[str] = None
-
-    model_config = ConfigDict(from_attributes=True)
+    rol: Optional[str] = Field(None, pattern=r"^(administrador|vendedor|almacen)$")
 
 
-# ────────────────────────────
-# Authentication schemas
-# ────────────────────────────
+# ─── Esquemas de Autenticación ───
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -69,16 +52,10 @@ class LoginResponse(BaseModel):
     usuario: UserOut
 
 
-# ────────────────────────────
-# Setup schemas
-# ────────────────────────────
-class SetupStatusResponse(BaseModel):
-    setup_completed: bool
-    admin_exists: bool
-
+# ─── Esquemas de Setup ───
 
 class SetupRequest(BaseModel):
-    nombre_completo: str = Field(..., min_length=1, max_length=150)
+    nombre_completo: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
     password: str = Field(..., min_length=6)
     negocio_nombre: str = Field(..., min_length=1)
@@ -92,34 +69,29 @@ class SetupResponse(BaseModel):
     usuario: UserOut
 
 
-# ────────────────────────────
-# Preferences schemas
-# ────────────────────────────
-class PreferenciasOut(BaseModel):
-    idioma: str = "es"
-    tema_visual: str = "light"
-    zona_horaria: str = "America/Mexico_City"
+class SetupStatusResponse(BaseModel):
+    setup_completed: bool
+    admin_exists: bool
 
+
+# ─── Esquemas de Preferencias ───
+
+class PreferenciasOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    @field_validator("zona_horaria", mode="before")
-    @classmethod
-    def extract_zona_horaria(cls, v):
-        """Map configuracion_regional to zona_horaria for frontend compatibility."""
-        if v is None:
-            return "America/Mexico_City"
-        return v
+    idioma: str = "es"
+    tema_visual: str = "light"
+    configuracion_regional: str = "es-MX"
 
 
 class PreferenciasUpdateRequest(BaseModel):
     idioma: Optional[str] = None
     tema_visual: Optional[str] = None
-    zona_horaria: Optional[str] = None
+    configuracion_regional: Optional[str] = None
 
 
-# ────────────────────────────
-# Password recovery schemas
-# ────────────────────────────
+# ─── Esquemas de Recuperación de Contraseña ───
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
@@ -153,9 +125,8 @@ class ChangePasswordResponse(BaseModel):
     mensaje: str
 
 
-# ────────────────────────────
-# Generic response schemas
-# ────────────────────────────
+# ─── Esquemas de Respuesta Genéricos ───
+
 class PaginatedUsersResponse(BaseModel):
     items: List[UserOut]
     total: int

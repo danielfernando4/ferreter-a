@@ -1,25 +1,23 @@
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from autenticacin_usuarios_y_configuracin_inicial.models import Usuario, TokenSesion
-from autenticacin_usuarios_y_configuracin_inicial.utils import decode_access_token, hash_token
+from .models import Usuario, TokenSesion
+from .utils import decode_access_token, hash_token
 
 security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> Usuario:
-    """Dependency that validates the Bearer token and returns the current user.
-
-    Verifies the JWT, checks the session token is still active in the DB,
-    and returns the Usuario with eager-loaded relationships.
-    """
+    """Validate Bearer token and return the authenticated user."""
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -27,8 +25,10 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token_str = credentials.credentials
-    payload = decode_access_token(token_str)
+    token = credentials.credentials
+
+    # Decode JWT
+    payload = decode_access_token(token)
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -36,39 +36,38 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    usuario_id = int(payload.get("sub", "0"))
-    if usuario_id == 0:
+    user_id: Optional[int] = payload.get("user_id")
+    token_id: Optional[int] = payload.get("token_id")
+
+    if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="UNAUTHORIZED",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Verify the session token exists and is active in the database
-    token_hashed = hash_token(token_str)
-    result = await db.execute(
-        select(TokenSesion).where(
-            TokenSesion.token_hash == token_hashed,
-            TokenSesion.activo == True,
+    # Verify token is still active in database
+    if token_id is not None:
+        result = await db.execute(
+            select(TokenSesion).where(TokenSesion.id == token_id, TokenSesion.activo == True)
         )
-    )
-    db_token = result.scalar_one_or_none()
-    if db_token is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="UNAUTHORIZED",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        db_token = result.scalar_one_or_none()
+        if db_token is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="UNAUTHORIZED",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-    # Fetch the user with eager-loaded relationships
+    # Load user with all relationships
     result = await db.execute(
         select(Usuario)
         .options(
             selectinload(Usuario.rol),
-            selectinload(Usuario.tokens_sesion),
             selectinload(Usuario.preferencias),
+            selectinload(Usuario.tokens_sesion),
         )
-        .where(Usuario.id == usuario_id)
+        .where(Usuario.id == user_id)
     )
     user = result.scalar_one_or_none()
 
@@ -83,7 +82,7 @@ async def get_current_user(
 
 
 async def require_admin(current_user: Usuario = Depends(get_current_user)) -> Usuario:
-    """Dependency that ensures the current user has admin role."""
+    """Verify the current user has the admin role."""
     if current_user.rol.nombre != "administrador":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

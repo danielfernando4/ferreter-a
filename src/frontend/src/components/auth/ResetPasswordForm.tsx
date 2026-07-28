@@ -1,142 +1,107 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { authApi } from '../../services/api';
-import { Lock, Loader2, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { KeyRound, Loader2 } from 'lucide-react';
+import * as api from '../../services/api';
 
 interface ResetPasswordFormProps {
   token: string;
+  onSuccess: () => void;
 }
 
-export default function ResetPasswordForm({ token }: ResetPasswordFormProps) {
-  const navigate = useNavigate();
+export default function ResetPasswordForm({ token, onSuccess }: ResetPasswordFormProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newPassword.trim() || !confirmPassword.trim()) {
-      setError('Todos los campos son obligatorios');
+    setError('');
+    if (newPassword !== confirmPassword) {
+      setError('Las contraseñas no coinciden');
       return;
     }
     if (newPassword.length < 6) {
       setError('La contraseña debe tener al menos 6 caracteres');
       return;
     }
-    if (newPassword !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
-      return;
-    }
     setIsLoading(true);
-    setError('');
     try {
-      await authApi.resetPassword({
+      await api.resetPassword({
         token,
         new_password: newPassword,
         confirm_password: confirmPassword,
       });
-      setSuccess(true);
+      onSuccess();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al restablecer la contraseña';
       setError(msg);
     } finally {
       setIsLoading(false);
     }
-  }
-
-  if (success) {
-    return (
-      <div className="text-center space-y-4">
-        <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-          <CheckCircle2 className="h-6 w-6 text-green-600" />
-        </div>
-        <h2 className="text-lg font-semibold text-slate-900">Contraseña actualizada</h2>
-        <p className="text-sm text-slate-600">
-          Tu contraseña se ha restablecido exitosamente. Ahora puedes iniciar sesión con tu nueva contraseña.
-        </p>
-        <button
-          type="button"
-          onClick={() => navigate('/login')}
-          className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-all"
-        >
-          Ir a iniciar sesión
-        </button>
-      </div>
-    );
-  }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="text-center">
-        <h2 className="text-lg font-semibold text-slate-900">Nueva contraseña</h2>
+      <div className="text-center mb-2">
+        <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
+          <KeyRound className="text-green-600" size={24} />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Restablecer contraseña</h2>
         <p className="text-sm text-slate-500 mt-1">
-          Ingresa y confirma tu nueva contraseña
+          Ingresa tu nueva contraseña
         </p>
       </div>
 
       {error && (
-        <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="p-3 text-sm text-red-600 bg-red-50 rounded-xl border border-red-200">
           {error}
         </div>
       )}
 
       <div>
-        <label htmlFor="new-password" className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor="new-password" className="block text-sm font-medium text-slate-700 mb-1.5">
           Nueva contraseña
         </label>
-        <div className="relative">
-          <input
-            id="new-password"
-            type={showPassword ? 'text' : 'password'}
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Mínimo 6 caracteres"
-            className="w-full rounded-2xl border border-slate-300 px-4 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-            disabled={isLoading}
-            autoComplete="new-password"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            tabIndex={-1}
-          >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
+        <input
+          id="new-password"
+          type="password"
+          value={newPassword}
+          onChange={e => setNewPassword(e.target.value)}
+          required
+          minLength={6}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+        />
       </div>
 
       <div>
-        <label htmlFor="confirm-password" className="block text-sm font-medium text-slate-700 mb-1">
-          Confirmar contraseña
+        <label htmlFor="confirm-password" className="block text-sm font-medium text-slate-700 mb-1.5">
+          Confirmar nueva contraseña
         </label>
         <input
           id="confirm-password"
           type="password"
           value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          placeholder="Repite la contraseña"
-          className="w-full rounded-2xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-          disabled={isLoading}
-          autoComplete="new-password"
+          onChange={e => setConfirmPassword(e.target.value)}
+          required
+          minLength={6}
+          className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
         />
       </div>
 
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-all"
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white font-medium rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Lock className="h-4 w-4" />
-        )}
+        {isLoading ? <Loader2 size={20} className="animate-spin" /> : <KeyRound size={20} />}
         {isLoading ? 'Guardando...' : 'Restablecer contraseña'}
       </button>
+
+      <div className="text-center">
+        <a href="/login" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+          Volver al inicio de sesión
+        </a>
+      </div>
     </form>
   );
 }

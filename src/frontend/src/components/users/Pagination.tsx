@@ -9,70 +9,47 @@ interface PaginationProps {
 export default function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
   if (totalPages <= 1) return null;
 
-  function getPages(): (number | 'ellipsis')[] {
-    const pages: (number | 'ellipsis')[] = [];
-    const delta = 1;
-
-    pages.push(1);
-
-    if (currentPage - delta > 2) {
-      pages.push('ellipsis');
-    }
-
-    for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
+  const pages: (number | string)[] = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
       pages.push(i);
+    } else if (pages[pages.length - 1] !== '...') {
+      pages.push('...');
     }
-
-    if (currentPage + delta < totalPages - 1) {
-      pages.push('ellipsis');
-    }
-
-    if (totalPages > 1) {
-      pages.push(totalPages);
-    }
-
-    return pages;
   }
 
-  const pages = getPages();
-
   return (
-    <div className="flex items-center justify-center gap-1">
+    <div className="flex items-center justify-center gap-1 mt-6">
       <button
-        type="button"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage <= 1}
-        className="flex items-center justify-center h-9 w-9 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
       >
-        <ChevronLeft className="h-4 w-4" />
+        <ChevronLeft size={18} />
       </button>
-
-      {pages.map((page, idx) =>
-        page === 'ellipsis' ? (
-          <span key={`ellipsis-${idx}`} className="px-2 text-slate-400 text-sm">...</span>
+      {pages.map((p, i) =>
+        p === '...' ? (
+          <span key={`e${i}`} className="px-2 text-slate-400">...</span>
         ) : (
           <button
-            key={page}
-            type="button"
-            onClick={() => onPageChange(page)}
-            className={`flex items-center justify-center h-9 w-9 rounded-xl text-sm font-medium transition-all ${
-              page === currentPage
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
+            key={p}
+            onClick={() => onPageChange(p as number)}
+            className={`w-9 h-9 rounded-xl text-sm font-medium transition-all ${
+              currentPage === p
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            {page}
+            {p}
           </button>
-        )
+        ),
       )}
-
       <button
-        type="button"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage >= totalPages}
-        className="flex items-center justify-center h-9 w-9 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
       >
-        <ChevronRight className="h-4 w-4" />
+        <ChevronRight size={18} />
       </button>
     </div>
   );

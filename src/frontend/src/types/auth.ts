@@ -1,5 +1,5 @@
 // ============================================================
-// Auth & Users Types
+// Types for Autenticación, Usuarios y Configuración Inicial
 // ============================================================
 
 export interface UserOut {
@@ -25,8 +25,6 @@ export interface UserUpdateRequest {
   rol?: string;
 }
 
-// --- Auth ---
-
 export interface LoginRequest {
   email: string;
   password: string;
@@ -40,13 +38,6 @@ export interface LoginResponse {
   usuario: UserOut;
 }
 
-// --- Setup ---
-
-export interface SetupStatusResponse {
-  setup_completed: boolean;
-  admin_exists: boolean;
-}
-
 export interface SetupRequest {
   nombre_completo: string;
   email: string;
@@ -54,7 +45,7 @@ export interface SetupRequest {
   negocio_nombre: string;
   negocio_direccion: string;
   negocio_rfc: string;
-  negocio_telefono?: string | null;
+  negocio_telefono?: string;
 }
 
 export interface SetupResponse {
@@ -62,21 +53,10 @@ export interface SetupResponse {
   usuario: UserOut;
 }
 
-// --- Preferencias ---
-
-export interface PreferenciasOut {
-  idioma: string;
-  tema_visual: string;
-  zona_horaria: string;
+export interface SetupStatusResponse {
+  setup_completed: boolean;
+  admin_exists: boolean;
 }
-
-export interface PreferenciasUpdateRequest {
-  idioma?: string;
-  tema_visual?: string;
-  zona_horaria?: string;
-}
-
-// --- Password Recovery ---
 
 export interface ForgotPasswordRequest {
   email: string;
@@ -111,19 +91,17 @@ export interface ChangePasswordResponse {
   mensaje: string;
 }
 
-// --- Perfil ---
-
-export interface PerfilUpdateRequest {
-  nombre_completo?: string;
-  email?: string;
+export interface PreferenciasOut {
+  idioma: string;
+  tema_visual: string;
+  zona_horaria: string;
 }
 
-export interface PerfilResponse {
-  usuario: UserOut;
-  preferencias: PreferenciasOut;
+export interface PreferenciasUpdateRequest {
+  idioma?: string;
+  tema_visual?: string;
+  zona_horaria?: string;
 }
-
-// --- Generic ---
 
 export interface PaginatedUsersResponse {
   items: UserOut[];
@@ -138,6 +116,19 @@ export interface UserActionResponse {
   usuario: UserOut;
 }
 
-export interface LogoutResponse {
-  mensaje: string;
+export interface PerfilResponse {
+  usuario: UserOut;
+  preferencias: PreferenciasOut;
+}
+
+export interface PerfilUpdateRequest {
+  nombre_completo?: string;
+  email?: string;
+}
+
+export interface AuthState {
+  user: UserOut | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
 }

@@ -13,10 +13,7 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500">Verificando sesión...</p>
-        </div>
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600" />
       </div>
     );
   }
@@ -25,7 +22,7 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRole && user && user.rol !== requiredRole && user.rol !== 'administrador') {
+  if (requiredRole && user?.rol !== requiredRole) {
     return <Navigate to="/" replace />;
   }
 
